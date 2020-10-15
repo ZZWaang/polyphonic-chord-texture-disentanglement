@@ -14,7 +14,6 @@ temp_data/
 demorun/
 long_demo/
 post/
-*.mid
 bk_models/
 song_demo/
 # Distribution / packaging
