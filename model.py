@@ -89,7 +89,7 @@ class DisentangleVAE(PytorchModel):
         kl_loss = kl_chd + kl_rhy
         return kl_loss, kl_chd, kl_rhy
 
-    def loss(self, x, c, pr_mat, tfr1=0., tfr2=0., tfr3=0.,
+    def loss(self, x, c, pr_mat, dt_x, tfr1=0., tfr2=0., tfr3=0.,
              beta=0.1, weights=(1, 0.5)):
         outputs = self.run(x, c, pr_mat, tfr1, tfr2, tfr3)
         loss = self.loss_function(x, c, *outputs, beta, weights)

@@ -225,6 +225,11 @@ def collect_data_fns():
         if int(num_beats) == 2:
             valid_files.append(file)
     print('Selected %d files, all are in duple meter.' % len(valid_files))
+
+    import pickle
+    with open('data/ind.pkl', 'wb') as f:
+        pickle.dump(valid_files, f)
+        f.close()
     return valid_files
 
 
@@ -265,7 +270,8 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8,
 def prepare_dataset(seed, bs_train, bs_val,
                     portion=8, shift_low=-6, shift_high=5, num_bar=2,
                     contain_chord=False, random_train=True, random_val=False):
-    fns = collect_data_fns()
+    if not os.path.exists('data/ind.pkl'):
+        collect_data_fns()
     import pickle
     with open('data/ind.pkl', 'rb') as f:
         fns = pickle.load(f)
