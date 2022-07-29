@@ -269,3 +269,5 @@ class BeatTrack:
         ts_values = self.beat_table[ts_change_pos, 5]
         return ts_change_pos, ts_values
 
+class NikoChordProgression:
+    pass

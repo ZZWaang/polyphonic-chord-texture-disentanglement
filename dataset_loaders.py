@@ -10,8 +10,7 @@ class MusicDataLoaders(DataLoaders):
                     portion=8, shift_low=-6, shift_high=5, num_bar=2,
                     contain_chord=True, random_train=True, random_val=False):
         train, val = prepare_dataset(seed, bs_train, bs_val, portion, shift_low,
-                                     shift_high, num_bar, contain_chord,
-                                     random_train, random_val)
+                                     shift_high, num_bar, random_train, random_val)
         return MusicDataLoaders(train, val, bs_train, bs_val)
 
     def batch_to_inputs(self, batch):

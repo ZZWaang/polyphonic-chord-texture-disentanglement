@@ -3,12 +3,11 @@ from torch.utils.data import Dataset
 import glob
 import os
 import pandas as pd
-from score import PolyphonicMusic
+from score import PolyphonicMusic, NikoChordProgression
 from torch.utils.data import DataLoader
 from converter import ext_nmat_to_pr, ext_nmat_to_mel_pr, \
     augment_pr, augment_mel_pr, pr_to_onehot_pr, piano_roll_to_target, \
     target_to_3dtarget, expand_chord
-
 
 DATA_PATH = os.path.join('data', 'POP09-PIANOROLL-4-bin-quantization')
 INDEX_FILE_PATH = os.path.join('data', 'index.xlsx')
@@ -167,6 +166,7 @@ def detrend_pianotree(piano_tree, c):
     notes = notes.reshape((32, 16, -1))
     return notes
 
+
 def get_chroma_state(chroma, map_dic):
     chroma_states = np.zeros((8, 7), dtype=int)
     chroma_states[:, [0, 4]] = ((1 - chroma[:, [0, 7]]) * 2).astype(int)
@@ -181,6 +181,7 @@ def get_chroma_state(chroma, map_dic):
     chroma_states[:, 6] = np.array([map_dic[tuple(cc)]
                                     for cc in chroma[:, [10, 11]]], dtype=int)
     return chroma_states
+
 
 def convert_note(pitch, chroma_state, root, bass, deg_table, semi_table):
     # chroma state: length 7
@@ -239,6 +240,16 @@ def init_music(fn):
     return music
 
 
+def init_music_niko_chord_progression(fn):
+    data = np.load(fn)
+    chord = data['chord']
+    melody = data['melody']
+    bridge = data['bridge']
+    piano = data['piano']
+    music = NikoChordProgression([melody, bridge, piano], chord, [70, 0, 0])
+    return music
+
+
 def split_dataset(length, portion):
     train_ind = np.random.choice(length, int(length * portion / (portion + 1)),
                                  replace=False)
@@ -246,13 +257,12 @@ def split_dataset(length, portion):
     return train_ind, valid_ind
 
 
-def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8,
-                 contain_chord=False):
+def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False):
     data = []
     indicator = []
     for i, ind in enumerate(ids):
         fn = fns[ind]
-        music = init_music(fn)
+        music = init_music_niko_chord_progression(fn) if niko else init_music(fn)
         data_track, indct, db_pos = music.prepare_data(num_bar=num_bar)
         data += data_track
         indicator.append(indct)
@@ -262,9 +272,8 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8,
     return dataset
 
 
-def prepare_dataset(seed, bs_train, bs_val,
-                    portion=8, shift_low=-6, shift_high=5, num_bar=2,
-                    contain_chord=False, random_train=True, random_val=False):
+def prepare_dataset(seed, bs_train, bs_val,portion=8, shift_low=-6, shift_high=5,
+                    num_bar=2, random_train=True, random_val=False):
     fns = collect_data_fns()
     import pickle
     with open('data/ind.pkl', 'rb') as f:
@@ -272,9 +281,24 @@ def prepare_dataset(seed, bs_train, bs_val,
     np.random.seed(seed)
     train_ids, val_ids = split_dataset(len(fns), portion)
     train_set = wrap_dataset(fns, train_ids, shift_low, shift_high,
-                             num_bar=num_bar, contain_chord=contain_chord)
-    val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar,
-                           contain_chord=contain_chord)
+                             num_bar=num_bar)
+    val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar,)
+    print(len(train_set), len(val_set))
+    train_loader = DataLoader(train_set, bs_train, random_train)
+    val_loader = DataLoader(val_set, bs_val, random_val)
+    return train_loader, val_loader
+
+
+def prepare_dataset_niko(seed, bs_train, bs_val,
+                         portion=8, shift_low=-6, shift_high=5, num_bar=2,
+                         contain_chord=False, random_train=True, random_val=False):
+    import pickle
+    with open('data/ind.pkl', 'rb') as f:
+        fns = pickle.load(f)
+    np.random.seed(seed)
+    train_ids, val_ids = split_dataset(len(fns), portion)
+    train_set = wrap_dataset(fns, train_ids, shift_low, shift_high, num_bar=num_bar, niko=True)
+    val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar, niko=True)
     print(len(train_set), len(val_set))
     train_loader = DataLoader(train_set, bs_train, random_train)
     val_loader = DataLoader(val_set, bs_val, random_val)
