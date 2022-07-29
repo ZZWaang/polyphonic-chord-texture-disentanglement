@@ -236,6 +236,8 @@ def init_music(fn):
     melody = data['melody']
     bridge = data['bridge']
     piano = data['piano']
+    print(chord)
+    input()
     music = PolyphonicMusic([melody, bridge, piano], beat, chord, [70, 0, 0])
     return music
 
@@ -274,7 +276,7 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False):
 
 def prepare_dataset(seed, bs_train, bs_val,portion=8, shift_low=-6, shift_high=5,
                     num_bar=2, random_train=True, random_val=False):
-    fns = collect_data_fns()
+    # fns = collect_data_fns()
     import pickle
     with open('data/ind.pkl', 'rb') as f:
         fns = pickle.load(f)
@@ -290,8 +292,7 @@ def prepare_dataset(seed, bs_train, bs_val,portion=8, shift_low=-6, shift_high=5
 
 
 def prepare_dataset_niko(seed, bs_train, bs_val,
-                         portion=8, shift_low=-6, shift_high=5, num_bar=2,
-                         contain_chord=False, random_train=True, random_val=False):
+                         portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False):
     import pickle
     with open('data/ind.pkl', 'rb') as f:
         fns = pickle.load(f)
