@@ -1,6 +1,7 @@
 from converter import ext_nmat_to_nmat, nmat_to_notes
 import pretty_midi as pm
 import numpy as np
+np.set_printoptions(threshold=np.inf)
 
 
 class PolyphonicMusic:
@@ -49,7 +50,7 @@ class PolyphonicMusic:
         if db_pos is None or db_ts is None:
             db_pos, db_ts = self.beat_track.get_downbeats()
         bar_chord = []
-        for s, e in zip(db_pos, np.append(db_pos[1: ],
+        for s, e in zip(db_pos, np.append(db_pos[1:],
                                           db_pos[-1] + db_ts[-1])):
             bar_chord.append(self.chord_table[s: e])
         return bar_chord
@@ -267,6 +268,7 @@ class BeatTrack:
         ts_values = self.beat_table[ts_change_pos, 5]
         return ts_change_pos, ts_values
 
+
 class NikoChordProgression:
 
     def __init__(self, pr, chroma, bpm=120.):
@@ -278,11 +280,11 @@ class NikoChordProgression:
 
     def pr2tracks(self):
         track = []
-        for current_time in self.pr:
-            for pitch in range(len(current_time)):
-                if current_time[pitch] != 0:
+        for current_time in range(len(self.pr)):
+            for pitch in range(len(self.pr[current_time])):
+                if self.pr[current_time][pitch] != 0:
                     start = current_time
-                    end = current_time + current_time[pitch]
+                    end = current_time + self.pr[current_time][pitch]
                     vel = 80
                     track.append([start // 4, start % 4, 4, end // 4, end % 4, 4, pitch, vel])
         self.track = np.array(track)
@@ -299,27 +301,16 @@ class NikoChordProgression:
 
     def _break_chord_to_bars(self, db_pos):
         bar_chord = []
-        self.chord_table_beat = self.chord_table[:, :, 4]
+        self.chord_table_beat = self.chord_table[::4, :]
         for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
             bar_chord.append(self.chord_table_beat[s: e])
         return bar_chord
 
-    def prepare_data(self, num_bar=8, ts=4, mel_id=(0,), acc_id=(1, 2)):
+    def prepare_data(self, num_bar=8, ts=4):
         # Indicator == 1 if
         # 1) The current bar has ts = 4
         # 2) The current bar is not blank
         # 3) The consecutive 3 bars have ts = 4.
-        def merge(tracks, ids):
-            to_merge = [track for i, track in enumerate(tracks) if i in ids and
-                        len(track) > 0]
-
-            if len(to_merge) == 0:
-                return None
-            else:
-                merged = np.concatenate(to_merge, axis=0)
-                merged = merged[merged[:, 0].argsort()]
-                return merged
-
         def translate_track(track, translation):
             if track is None:
                 return track
@@ -327,10 +318,12 @@ class NikoChordProgression:
             track[:, 3] -= translation
             return track
 
-        def get_downbeats(pr):
-            pass
+        def get_downbeats(track):
+            max_beat = max(track, key=lambda x: x[3])[3]
+            downbeats = list(range(0, max_beat, 4))
+            return downbeats
 
-        db_pos = get_downbeats(self.pr)
+        db_pos = get_downbeats(self.track)
         broken_tracks = self._break_track_to_bars(db_pos)
         broken_chords = self._break_chord_to_bars(db_pos)
         assert len(broken_tracks) == len(db_pos)
@@ -344,18 +337,15 @@ class NikoChordProgression:
                 indicator[i] = -1
         data_track = []
         for i in range(len(db_pos)):
-            tracks = broken_tracks[i]
-            mel_track = translate_track(merge(tracks, mel_id), db_pos[i])
-            acc_track = translate_track(merge(tracks, acc_id), db_pos[i])
+            track = broken_tracks[i]
+            mel_track = None
+            acc_track = translate_track(track, db_pos[i])
             chord = broken_chords[i]
             data_track.append([mel_track, acc_track, chord])
             if mel_track is None and acc_track is None:
                 indicator[i] = 0
                 continue
             if i > len(db_pos) - num_bar:
-                indicator[i] = 0
-                continue
-            if not (db_ts[i: i + num_bar] == ts).all():
                 indicator[i] = 0
                 continue
             if (indicator[i: i + num_bar] == -1).any():

@@ -42,7 +42,7 @@ model = DisentangleVAE(name, device, chd_encoder,
 data_loaders = \
     MusicDataLoaders.get_loaders(SEED, bs_train=batch_size, bs_val=batch_size,
                                  portion=8, shift_low=-6, shift_high=5,
-                                 num_bar=2,
+                                 num_bar=4,
                                  contain_chord=True)
 
 log_path_mng = LogPathManager(readme_fn)

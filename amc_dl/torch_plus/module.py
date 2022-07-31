@@ -198,7 +198,7 @@ class TrainingInterface:
         self.train_step = start_train_step
         self.val_step = start_val_step
         best_valid_loss = float('inf')
-
+        print('Start Training')
         for i in range(self.n_epoch):
             start_time = time.time()
             train_loss = self.train()['loss']
