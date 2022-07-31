@@ -1,4 +1,4 @@
-from dataset import prepare_dataset
+from dataset import prepare_dataset_niko, prepare_dataset
 from amc_dl.torch_plus import DataLoaders
 from amc_dl.torch_plus import TrainingInterface
 

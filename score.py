@@ -39,10 +39,8 @@ class PolyphonicMusic:
         if db_pos is None or db_ts is None:
             db_pos, db_ts = self.beat_track.get_downbeats()
         bar_tracks = []
-        for s, e in zip(db_pos, np.append(db_pos[1: ],
-                                          db_pos[-1] + db_ts[-1])):
-            note_inds = \
-                np.where(np.logical_and(track[:, 0] >= s, track[:, 0] < e))[0]
+        for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + db_ts[-1])):
+            note_inds = np.where(np.logical_and(track[:, 0] >= s, track[:, 0] < e))[0]
             bar_track = track[note_inds]
             bar_tracks.append(bar_track)
         return bar_tracks
@@ -271,64 +269,40 @@ class BeatTrack:
 
 class NikoChordProgression:
 
-    def __init__(self, tracks, chord_table, instrument_list=None,
-                 track_name_list=None, bpm=120.):
-        self.tracks = tracks
-        # self.beat_table = beat_table
-        self.beat_track = None
-        self.chord_table = chord_table  # chord table is not regularized!
-        self.regularize_chord_table()
-        self.regularize_tracks()
-        self.num_track = len(tracks)
-        if instrument_list is None:
-            self.instrument_list = [0] * len(tracks)
-        else:
-            self.instrument_list = instrument_list
-        if track_name_list is None:
-            self.track_name_list = [str(i) for i in range(self.num_track)]
-        else:
-            self.track_name_list = track_name_list
+    def __init__(self, pr, chroma, bpm=120.):
+        self.chord_table = chroma
+        self.pr = pr
         self.bpm = bpm
+        self.track = None
+        self.pr2tracks()
 
-    def _select_track(self, track_ind=None, track_name=None):
-        if track_ind is None and track_name is None:
-            track_ind = 0
-        elif track_ind is None:
-            track_ind = self.track_name_list.index(track_name)
-        track = self.tracks[track_ind]
-        return track
+    def pr2tracks(self):
+        track = []
+        for current_time in self.pr:
+            for pitch in range(len(current_time)):
+                if current_time[pitch] != 0:
+                    start = current_time
+                    end = current_time + current_time[pitch]
+                    vel = 80
+                    track.append([start // 4, start % 4, 4, end // 4, end % 4, 4, pitch, vel])
+        self.track = np.array(track)
 
-    def _break_track_to_bars(self, track, db_pos=None, db_ts=None):
+    def _break_track_to_bars(self, db_pos):
         # return a list of bars
         # track = self._select_track(track_ind, track_name)
-        if db_pos is None or db_ts is None:
-            db_pos, db_ts = self.beat_track.get_downbeats()
         bar_tracks = []
-        for s, e in zip(db_pos, np.append(db_pos[1: ],
-                                          db_pos[-1] + db_ts[-1])):
-            note_inds = \
-                np.where(np.logical_and(track[:, 0] >= s, track[:, 0] < e))[0]
-            bar_track = track[note_inds]
+        for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
+            note_inds = np.where(np.logical_and(self.track[:, 0] >= s, self.track[:, 0] < e))[0]
+            bar_track = self.track[note_inds]
             bar_tracks.append(bar_track)
         return bar_tracks
 
-    def _break_chord_to_bars(self, track, db_pos=None, db_ts=None):
-        if db_pos is None or db_ts is None:
-            db_pos, db_ts = self.beat_track.get_downbeats()
+    def _break_chord_to_bars(self, db_pos):
         bar_chord = []
-        for s, e in zip(db_pos, np.append(db_pos[1: ],
-                                          db_pos[-1] + db_ts[-1])):
-            bar_chord.append(self.chord_table[s: e])
+        self.chord_table_beat = self.chord_table[:, :, 4]
+        for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
+            bar_chord.append(self.chord_table_beat[s: e])
         return bar_chord
-
-    def break_tracks_to_bars(self, db_pos=None, db_ts=None):
-        if db_pos is None or db_ts is None:
-            db_pos, db_ts = self.beat_track.get_downbeats()
-        broken_tracks = \
-            [self._break_track_to_bars(track, db_pos, db_ts)
-             for track in self.tracks]
-        broken_tracks = [list(bar) for bar in zip(*broken_tracks)]
-        return broken_tracks
 
     def prepare_data(self, num_bar=8, ts=4, mel_id=(0,), acc_id=(1, 2)):
         # Indicator == 1 if
@@ -353,9 +327,12 @@ class NikoChordProgression:
             track[:, 3] -= translation
             return track
 
-        db_pos, db_ts = self.beat_track.get_downbeats()
-        broken_tracks = self.break_tracks_to_bars(db_pos, db_ts)
-        broken_chords = self._break_chord_to_bars(db_pos, db_ts)
+        def get_downbeats(pr):
+            pass
+
+        db_pos = get_downbeats(self.pr)
+        broken_tracks = self._break_track_to_bars(db_pos)
+        broken_chords = self._break_chord_to_bars(db_pos)
         assert len(broken_tracks) == len(db_pos)
         assert len(broken_chords) == len(db_pos)
         indicator = np.zeros(len(db_pos))
@@ -386,76 +363,3 @@ class NikoChordProgression:
                 continue
             indicator[i] = 1
         return data_track, indicator, db_pos
-
-    def regularize_chord_table(self):
-        pre_cat = np.zeros((self.beat_track.translation,
-                            self.chord_table.shape[1]),
-                           dtype=self.chord_table.dtype)
-        post_cat = np.zeros((self.beat_track.post_translation,
-                             self.chord_table.shape[1]),
-                            dtype=self.chord_table.dtype)
-        self.chord_table = \
-            np.concatenate([pre_cat, self.chord_table, post_cat], axis=0)
-
-    def regularize_track(self, track):
-        track[:, 0] += self.beat_track.translation
-        track[:, 3] += self.beat_track.translation
-        return track
-
-    def regularize_tracks(self):
-        self.tracks = [self.regularize_track(track) for track in self.tracks]
-
-    def convert_track_to_nmat(self, track_ind=None, track_name=None):
-        track = self._select_track(track_ind, track_name)
-        return ext_nmat_to_nmat(track)
-
-    def convert_track_to_notes(self, track_ind=None, track_name=None,
-                               start=0., bpm=None):
-        if bpm is None:
-            bpm = self.bpm
-        nmat = self.convert_track_to_nmat(track_ind, track_name)
-        notes = nmat_to_notes(nmat, start, bpm)
-        return notes
-
-    def convert_tracks(self, track_ids=None, track_names=None,
-                       start=0., bpm=None):
-        if bpm is None:
-            bpm = self.bpm
-        if track_ids is None:
-            track_ids = [None] * self.num_track
-        if track_names is None:
-            track_names = [None] * self.num_track
-        track_notes = []
-        for track_id, track_name in zip(track_ids, track_names):
-            notes = self.convert_track_to_notes(track_id, track_name,
-                                                start, bpm)
-            track_notes.append(notes)
-        return track_notes
-
-    def export_to_pretty_midi(self, track_ids=None, track_names=None,
-                              start=0., bpm=None):
-        if bpm is None:
-            bpm = self.bpm
-        if track_ids is None and track_names is None:
-            track_ids = list(range(self.num_track))
-            track_names = self.track_name_list
-        elif track_ids is None:
-            track_ids = [self.track_name_list.index(name)
-                         for name in track_names]
-        elif track_names is None:
-            track_names = [self.track_name_list[i] for i in track_ids]
-        inst_ids = [self.instrument_list[i] for i in track_ids]
-        track_notes = self.convert_tracks(track_ids, track_names, start, bpm)
-
-        midi = pm.PrettyMIDI()
-        for notes, inst, name in zip(track_notes, inst_ids, track_names):
-            instrument = pm.Instrument(inst, name=name)
-            instrument.notes = notes
-            midi.instruments.append(instrument)
-        return midi
-
-    def write_midi(self, fn, track_ids=None, track_names=None,
-                   start=0., bpm=None):
-        midi = self.export_to_pretty_midi(track_ids, track_names,
-                                          start, bpm)
-        midi.write(fn)

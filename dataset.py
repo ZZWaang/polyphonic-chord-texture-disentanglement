@@ -236,19 +236,14 @@ def init_music(fn):
     melody = data['melody']
     bridge = data['bridge']
     piano = data['piano']
-    print(chord)
-    input()
     music = PolyphonicMusic([melody, bridge, piano], beat, chord, [70, 0, 0])
     return music
 
 
-def init_music_niko_chord_progression(fn):
-    data = np.load(fn)
-    chord = data['chord']
-    melody = data['melody']
-    bridge = data['bridge']
-    piano = data['piano']
-    music = NikoChordProgression([melody, bridge, piano], chord, [70, 0, 0])
+def init_music_niko_chord_progression(data):
+    chroma = data['c']
+    pr = data['pr']
+    music = NikoChordProgression(pr, chroma)
     return music
 
 
@@ -293,13 +288,15 @@ def prepare_dataset(seed, bs_train, bs_val,portion=8, shift_low=-6, shift_high=5
 
 def prepare_dataset_niko(seed, bs_train, bs_val,
                          portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False):
-    import pickle
-    with open('data/ind.pkl', 'rb') as f:
-        fns = pickle.load(f)
+    """
+    Return the dataloaders of the niko dataset
+    """
+    data = np.load('data/poly-dis-niko.npz', allow_pickle=True)
     np.random.seed(seed)
-    train_ids, val_ids = split_dataset(len(fns), portion)
-    train_set = wrap_dataset(fns, train_ids, shift_low, shift_high, num_bar=num_bar, niko=True)
-    val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar, niko=True)
+    train_ids, val_ids = split_dataset(len(data), portion)
+    train_set = wrap_dataset(data, train_ids, shift_low, shift_high,
+                             num_bar=num_bar, niko=True)
+    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True)
     print(len(train_set), len(val_set))
     train_loader = DataLoader(train_set, bs_train, random_train)
     val_loader = DataLoader(val_set, bs_val, random_val)
