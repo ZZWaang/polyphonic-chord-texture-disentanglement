@@ -266,7 +266,7 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, cache_n
         np.savez_compressed(f'cache/wrap_dataset_cache_{cache_name}', data=data, indicator=indicator)
 
     data, indicator = load_cache()
-    if data is not []:
+    if data:
         print(f'Using cached dataset with cache name {cache_name}')
         dataset = ArrangementDataset(data, indicator, shift_low, shift_high,
                                      num_bar=num_bar, contain_chord=True)

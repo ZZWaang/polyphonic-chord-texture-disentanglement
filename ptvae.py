@@ -444,7 +444,7 @@ class PtvaeDecoder(nn.Module):
             assert teacher_forcing_ratio2 == 0
         else:
             x_summarized = x.view(-1, self.max_simu_note, self.note_emb_size)
-            x_summarized = pack_padded_sequence(x_summarized, lengths.view(-1),
+            x_summarized = pack_padded_sequence(x_summarized, lengths.view(-1).int().cpu(),
                                                 batch_first=True,
                                                 enforce_sorted=False)
             x_summarized = self.dec_notes_emb_gru(x_summarized)[-1].\
@@ -478,7 +478,7 @@ class PtvaeDecoder(nn.Module):
                 token = x_summarized[:, t].unsqueeze(1)
             else:
                 token = pack_padded_sequence(predicted_notes,
-                                             predicted_lengths,
+                                             predicted_lengths.int().cpu(),
                                              batch_first=True,
                                              enforce_sorted=False)
                 token = self.dec_notes_emb_gru(token)[-1].\
