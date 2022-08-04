@@ -195,7 +195,7 @@ def inference(chord_table, acc_emsemble):
         # midiReGen.write('accompaniment_test_NEW.mid')
     else:
         model = DisentangleVAE.init_model(torch.device('cpu'))
-        checkpoint = torch.load('/model_master_final.pt', map_location=torch.device('cpu'))
+        checkpoint = torch.load('data/model_master_final.pt', map_location=torch.device('cpu'))
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
@@ -213,7 +213,7 @@ def midi2pr(track):
 
     midi = pyd.PrettyMIDI()
     midi.instruments.append(track)
-    fs = 4  # dataset independent
+    fs = 8  # dataset independent
     # Returns matrix of shape (128, time) with summed velocities.
     pr = midi.get_piano_roll(fs=fs)
     pr = np.where(pr > 0, 1, 0)
