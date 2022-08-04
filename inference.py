@@ -1,6 +1,7 @@
 import copy
 
 import numpy as np
+import pretty_midi
 import torch
 import pretty_midi as pyd
 from model import DisentangleVAE
@@ -181,7 +182,7 @@ def inference(chord_table, acc_emsemble):
     chord_table = chordSplit(chord_table, 8, 8)
     if torch.cuda.is_available():
         model = DisentangleVAE.init_model(torch.device('cuda')).cuda()
-        checkpoint = torch.load('/model_master_final.pt')
+        checkpoint = torch.load('data/model_master_final.pt')
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float().cuda()
         # pr_matrix_shifted = torch.from_numpy(pr_matrix_shifted).float().cuda()
@@ -195,7 +196,7 @@ def inference(chord_table, acc_emsemble):
         # midiReGen.write('accompaniment_test_NEW.mid')
     else:
         model = DisentangleVAE.init_model(torch.device('cpu'))
-        checkpoint = torch.load('/model_master_final.pt', map_location=torch.device('cpu'))
+        checkpoint = torch.load('data/model_master_final.pt', map_location=torch.device('cpu'))
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
@@ -213,13 +214,29 @@ def midi2pr(track):
 
     midi = pyd.PrettyMIDI()
     midi.instruments.append(track)
-    fs = 4  # dataset independent
+    fs = 8  # dataset independent
     # Returns matrix of shape (128, time) with summed velocities.
     pr = midi.get_piano_roll(fs=fs)
     pr = np.where(pr > 0, 1, 0)
     pr = pr.T
     pr = pr[:, 0: 128]
     return pr
+
+
+def pr2midi(pr):
+    all_notes = []
+    i = 0
+    for time in pr:
+        for pitch in range(128):
+            if time[pitch] != 0:
+                all_notes.append(
+                    pretty_midi.Note(start=i * 0.125, end=(i + time[pitch]) * 0.125, pitch=pitch, velocity=60))
+        i += 1
+    ins = pretty_midi.Instrument(0)
+    ins.notes = all_notes
+    midi = pretty_midi.PrettyMIDI()
+    midi.instruments.append(ins)
+    return midi
 
 
 if __name__ == '__main__':
