@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 import glob
 import os
 import pandas as pd
+from tqdm import tqdm
 from score import PolyphonicMusic, NikoChordProgression
 from torch.utils.data import DataLoader
 from converter import ext_nmat_to_pr, ext_nmat_to_mel_pr, \
@@ -113,8 +114,8 @@ class ArrangementDataset(Dataset):
             chord = np.array([expand_chord(c, shift) for c in chord])
             # chord = chord[:, 12: 24]
             # chord = np.repeat(chord, self.ts, axis=0)
-            dt_x = detrend_pianotree(p_grids, chord)  # (32, 16, 39)
-            return mel_segments, prs, pr_mats, p_grids, chord, dt_x
+            # dt_x = detrend_pianotree(p_grids, chord)  # (32, 16, 39)
+            return mel_segments, prs, pr_mats, p_grids, chord, np.array([])
         else:
             return mel_segments, prs, pr_mats, p_grids
 
@@ -240,13 +241,6 @@ def init_music(fn):
     return music
 
 
-def init_music_niko_chord_progression(data):
-    chroma = data['c']
-    pr = data['pr']
-    music = NikoChordProgression(pr, chroma)
-    return music
-
-
 def split_dataset(length, portion):
     train_ind = np.random.choice(length, int(length * portion / (portion + 1)),
                                  replace=False)
@@ -254,18 +248,39 @@ def split_dataset(length, portion):
     return train_ind, valid_ind
 
 
-def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False):
-    data = []
-    indicator = []
-    for i, ind in enumerate(ids):
-        fn = fns[ind]
-        music = init_music_niko_chord_progression(fn) if niko else init_music(fn)
+def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, cache_name=''):
+
+    def load_cache():
+        if 'cache' in os.listdir('./'):
+            if f'wrap_dataset_cache_{cache_name}.npz' in os.listdir('cache'):
+                cache = np.load(f'cache/wrap_dataset_cache_{cache_name}.npz', allow_pickle=True)
+                return cache['data'], cache['indicator']
+            else:
+                return [], []
+        else:
+            return [], []
+
+    def save_cache():
+        os.makedirs('cache', exist_ok=True)
+        np.savez_compressed(f'cache/wrap_dataset_cache_{cache_name}', data=data, indicator=indicator)
+
+    data, indicator = load_cache()
+    if data is not []:
+        print(f'Using cached dataset with cache name {cache_name}')
+        dataset = ArrangementDataset(data, indicator, shift_low, shift_high,
+                                     num_bar=num_bar, contain_chord=True)
+        return dataset
+    if niko:
+        pr, c = fns['pr'], fns['c']
+    for ind in tqdm(ids):
+        music = init_music(fns[ind]) if not niko else NikoChordProgression(pr[ind], c[ind])
         data_track, indct, db_pos = music.prepare_data(num_bar=num_bar)
         data += data_track
         indicator.append(indct)
     indicator = np.concatenate(indicator)
     dataset = ArrangementDataset(data, indicator, shift_low, shift_high,
                                  num_bar=num_bar, contain_chord=True)
+    save_cache()
     return dataset
 
 
@@ -287,17 +302,20 @@ def prepare_dataset(seed, bs_train, bs_val,portion=8, shift_low=-6, shift_high=5
 
 
 def prepare_dataset_niko(seed, bs_train, bs_val,
-                         portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False):
+                         portion=8, shift_low=-6, shift_high=5, num_bar=4, random_train=True, random_val=False):
     """
     Return the dataloaders of the niko dataset
     """
+    print('Loading Training Data...')
     data = np.load('data/poly-dis-niko.npz', allow_pickle=True)
     np.random.seed(seed)
-    train_ids, val_ids = split_dataset(len(data), portion)
+    train_ids, val_ids = split_dataset(len(data['pr']), portion)
+    print('Constructing Training Set')
     train_set = wrap_dataset(data, train_ids, shift_low, shift_high,
-                             num_bar=num_bar, niko=True)
-    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True)
-    print(len(train_set), len(val_set))
+                             num_bar=num_bar, niko=True, cache_name='niko_train')
+    print('Constructing Validation Set')
+    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True, cache_name='niko_val')
+    print(f'Done with {len(train_set)} training samples, {len(val_set)} validation samples')
     train_loader = DataLoader(train_set, bs_train, random_train)
     val_loader = DataLoader(val_set, bs_val, random_val)
     return train_loader, val_loader
