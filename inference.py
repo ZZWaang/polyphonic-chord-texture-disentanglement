@@ -205,12 +205,27 @@ def inference(chord_table, acc_emsemble):
 
 
 def midi2pr(track):
-    return None
+    # return track.get_piano_roll(fs=120)
+
+    pianoroll = np.zeros((128, 128))
+    if not track.notes:
+        return pianoroll
+
+    midi = pyd.PrettyMIDI()
+    midi.instruments.append(track)
+    fs = 4  # dataset independent
+    # Returns matrix of shape (128, time) with summed velocities.
+    pr = midi.get_piano_roll(fs=fs)
+    pr = np.where(pr > 0, 1, 0)
+    pr = pr.T
+    pr = pr[:, 0: 128]
+    return pr
 
 
 if __name__ == '__main__':
-    path = ''
+    path = 'test.mid'
     midi = pyd.PrettyMIDI(path)
+    # print(midi.get_piano_roll(fs=120))
     chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
     chord_table = chord_table[::4, :]
     acc_emsemble = midi2pr(midi.instruments[0])
