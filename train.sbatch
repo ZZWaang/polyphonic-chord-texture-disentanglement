@@ -7,7 +7,7 @@
 #SBATCH --time=6:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --output=polydis2.out
-#SBATCH --mail-type=END
+#SBATCH --mail-type=ALL
 #SBATCH --mail-user=ly1387@nyu.edu
 
 module purge
