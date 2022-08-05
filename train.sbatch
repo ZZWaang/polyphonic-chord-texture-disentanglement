@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=polydis2
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --mem=16GB
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --output=polydis2.out
 #SBATCH --mail-type=ALL
