@@ -272,11 +272,24 @@ class BeatTrack:
 class NikoChordProgression:
 
     def __init__(self, pr, chroma, bpm=120.):
-        self.chord_table = chroma
-        self.pr = pr
+        self.chord_table = self.niko_down_sample(chroma, 'c')
+        self.pr = self.niko_down_sample(pr, 'pr')
         self.bpm = bpm
         self.track = None
         self.pr2tracks()
+
+    def niko_down_sample(self, data, data_type='pr'):
+        if data_type == 'pr':
+            new_data = []
+            for i in range(len(data)):
+                if i % 2 == 0:
+                    new_time = []
+                    for pitch in range(128):
+                        new_time.append(data[i][pitch] // 2)
+                    new_data.append(new_time)
+            return np.array(new_data)
+        if data_type == 'c':
+            return data[::2]
 
     def pr2tracks(self):
         track = []
@@ -302,8 +315,11 @@ class NikoChordProgression:
     def _break_chord_to_bars(self, db_pos):
         bar_chord = []
         self.chord_table_beat = self.chord_table[::4, :]
-        for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
-            bar_chord.append(self.chord_table_beat[s: e])
+        if len(db_pos) == 1:
+            bar_chord.append(self.chord_table_beat[0: 4])
+        else:
+            for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
+                bar_chord.append(self.chord_table_beat[s: e])
         return bar_chord
 
     def prepare_data(self, num_bar=8, ts=4):
