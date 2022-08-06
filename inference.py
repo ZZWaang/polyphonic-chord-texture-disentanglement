@@ -182,7 +182,7 @@ def inference(chord_table, acc_emsemble):
     chord_table = chordSplit(chord_table, 8, 8)
     if torch.cuda.is_available():
         model = DisentangleVAE.init_model(torch.device('cuda')).cuda()
-        checkpoint = torch.load('data/model_master_final.pt')
+        checkpoint = torch.load('data/train_20220806.pt')
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float().cuda()
         # pr_matrix_shifted = torch.from_numpy(pr_matrix_shifted).float().cuda()
@@ -196,7 +196,7 @@ def inference(chord_table, acc_emsemble):
         # midiReGen.write('accompaniment_test_NEW.mid')
     else:
         model = DisentangleVAE.init_model(torch.device('cpu'))
-        checkpoint = torch.load('data/model_master_final.pt', map_location=torch.device('cpu'))
+        checkpoint = torch.load('data/train_20220806.pt', map_location=torch.device('cpu'))
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
@@ -236,7 +236,55 @@ def pr2midi(pr):
     ins.notes = all_notes
     midi = pretty_midi.PrettyMIDI()
     midi.instruments.append(ins)
-    return midi
+    return
+
+
+def midi2pr_new(track):
+    midi = pretty_midi.PrettyMIDI()
+    midi.instruments.append(track)
+    notes, _, _ = midi_to_source_base(midi)
+    max_end = max(notes, key=lambda x: x[1])[1]
+    pr = np.zeros((max_end, 128))
+    for note in notes:
+        duration = note[1] - note[0]
+        pr[note[0], note[2]] = duration
+    return pr
+
+
+def midi_to_source_base(midi):
+    notes = midi.instruments[0].notes
+
+    # ensure that the first note starts at time 0
+    start_time = 1000
+    ori_start = 1000
+    end_time = 0
+    for note in notes:
+        if note.start < start_time:
+            start_time = note.start
+            ori_start = note_time_to_pos(note.start)
+    new_notes = []
+    for note in notes:
+        new_notes.append(pretty_midi.Note(start=note.start - start_time,
+                                          end=note.end - start_time,
+                                          velocity=note.velocity,
+                                          pitch=note.pitch))
+    notes = new_notes
+
+    # change note format
+    all_formatted_notes = []
+    max_end = 0
+    for note in notes:
+        start = note_time_to_pos(note.start)
+        end = note_time_to_pos(note.end)
+        if end > max_end:
+            max_end = end
+        formatted_notes = [start, end, note.pitch, note.velocity]
+        all_formatted_notes.append(formatted_notes)
+    return all_formatted_notes, ori_start, max_end
+
+
+def note_time_to_pos(time):
+    return int(round(time / 0.125, 0))
 
 
 if __name__ == '__main__':
@@ -245,6 +293,7 @@ if __name__ == '__main__':
     # print(midi.get_piano_roll(fs=120))
     chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
     chord_table = chord_table[::4, :]
-    acc_emsemble = midi2pr(midi.instruments[0])
+    acc_emsemble = midi2pr_new(midi.instruments[0])
+    print(chord_table.shape, acc_emsemble.shape)
     gen = inference(chord_table, acc_emsemble)
     gen.write('gen.mid')
