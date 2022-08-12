@@ -4,6 +4,8 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 import numpy as np
+
+from converter import target_to_3dtarget
 from ptvae import RnnEncoder, RnnDecoder, PtvaeDecoder, \
     TextureEncoder
 
@@ -141,6 +143,36 @@ class DisentangleVAE(PytorchModel):
                                                 None, 0., 0.)
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
         return est_x
+
+    def inference_with_loss(self, pr_mat, c, sample):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chd, False,
+                                                                    0., c)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+
+            x = np.array([target_to_3dtarget(i,
+                                               max_note_count=16,
+                                               max_pitch=128,
+                                               min_pitch=0,
+                                               pitch_pad_ind=130,
+                                               pitch_sos_ind=128,
+                                               pitch_eos_ind=129) for i in pr_mat])
+            x = torch.from_numpy(x)
+
+        def loss_for_inference(x, c, beta=0.1, weights=(1, 0.5)):
+            outputs = pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, \
+                      recon_chroma, recon_bass
+            loss = self.loss_function(x, c, *outputs, beta, weights)
+            return loss
+
+        return est_x, loss_for_inference(x, c)
 
     def swap(self, pr_mat1, pr_mat2, c1, c2, fix_rhy, fix_chd):
         pr_mat = pr_mat1 if fix_rhy else pr_mat2

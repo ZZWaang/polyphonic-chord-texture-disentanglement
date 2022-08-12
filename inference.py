@@ -188,7 +188,8 @@ def inference(chord_table, acc_emsemble):
         # pr_matrix_shifted = torch.from_numpy(pr_matrix_shifted).float().cuda()
         gt_chord = torch.from_numpy(chord_table).float().cuda()
         # print(gt_chord.shape, pr_matrix.shape)
-        est_x = model.inference(pr_matrix, gt_chord, sample=False)
+        est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
+        print(int(loss[1]))
         # print('est:', est_x.shape)
         # est_x_shifted = model.inference(pr_matrix_shifted, gt_chord, sample=False)
         midiReGen = accomapnimentGeneration(est_x, 120)
@@ -200,7 +201,8 @@ def inference(chord_table, acc_emsemble):
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
-        est_x = model.inference(pr_matrix, gt_chord, sample=False)
+        est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
+        print(float(loss[1]))
         midiReGen = accomapnimentGeneration(est_x, 120)
         return midiReGen
 
@@ -288,12 +290,11 @@ def note_time_to_pos(time):
 
 
 if __name__ == '__main__':
-    path = 'test.mid'
+    path = 'recon_test/test2.mid'
     midi = pyd.PrettyMIDI(path)
-    # print(midi.get_piano_roll(fs=120))
     chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
     chord_table = chord_table[::4, :]
     acc_emsemble = midi2pr_new(midi.instruments[0])
     print(chord_table.shape, acc_emsemble.shape)
     gen = inference(chord_table, acc_emsemble)
-    gen.write('gen.mid')
+    gen.write('gen2.mid')

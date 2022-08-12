@@ -95,6 +95,7 @@ class ArrangementDataset(Dataset):
         # deal with the polyphonic ones
         prs = np.array([pr_to_onehot_pr(pr) for pr in acc_segments])
         pr_mats = np.array([piano_roll_to_target(pr) for pr in prs])
+        print(pr_mats[0].shape)
         p_grids = np.array([target_to_3dtarget(pr_mat,
                                                max_note_count=16,
                                                max_pitch=128,
