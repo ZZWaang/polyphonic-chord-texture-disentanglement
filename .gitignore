@@ -134,3 +134,4 @@ dmypy.json
 
 cache/
 data/
+.pt
