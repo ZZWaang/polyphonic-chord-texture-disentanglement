@@ -243,10 +243,12 @@ def init_music(fn):
 
 
 def split_dataset(length, portion):
-    train_ind = np.random.choice(length, int(length * portion / (portion + 1)),
+    train_ind = np.random.choice(length, int(length * (portion-1) / (portion + 1)),
                                  replace=False)
-    valid_ind = np.setdiff1d(np.arange(0, length), train_ind)
-    return train_ind, valid_ind
+    valid_n_test_ind = np.setdiff1d(np.arange(0, length), train_ind)
+    valid_ind = np.random.choice(valid_n_test_ind, len(valid_n_test_ind)//2, replace=False)
+    test_ind = np.setdiff1d(valid_n_test_ind, valid_ind)
+    return train_ind, valid_ind, test_ind
 
 
 def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, cache_name=''):
@@ -285,14 +287,14 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, cache_n
     return dataset
 
 
-def prepare_dataset(seed, bs_train, bs_val,portion=8, shift_low=-6, shift_high=5,
+def prepare_dataset(seed, bs_train, bs_val, portion=8, shift_low=-6, shift_high=5,
                     num_bar=2, random_train=True, random_val=False):
     # fns = collect_data_fns()
     import pickle
     with open('data/ind.pkl', 'rb') as f:
         fns = pickle.load(f)
     np.random.seed(seed)
-    train_ids, val_ids = split_dataset(len(fns), portion)
+    train_ids, val_ids, test_ids = split_dataset(len(fns), portion)
     train_set = wrap_dataset(fns, train_ids, shift_low, shift_high,
                              num_bar=num_bar)
     val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar,)
@@ -310,7 +312,8 @@ def prepare_dataset_niko(seed, bs_train, bs_val,
     print('Loading Training Data...')
     data = np.load('data/poly-dis-niko.npz', allow_pickle=True)
     np.random.seed(seed)
-    train_ids, val_ids = split_dataset(len(data['pr']), portion)
+    train_ids, val_ids, test_ids = split_dataset(len(data['pr']), portion)
+    np.save('test_ids.npy', test_ids)
     print('Constructing Training Set')
     train_set = wrap_dataset(data, train_ids, shift_low, shift_high,
                              num_bar=num_bar, niko=True, cache_name='niko_train')

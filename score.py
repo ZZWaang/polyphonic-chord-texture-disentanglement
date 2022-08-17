@@ -280,16 +280,18 @@ class NikoChordProgression:
 
     def niko_down_sample(self, data, data_type='pr'):
         if data_type == 'pr':
+            sample_rate = 2 if len(data) < 128 else 4
             new_data = []
             for i in range(len(data)):
-                if i % 2 == 0:
+                if i % sample_rate == 0:
                     new_time = []
                     for pitch in range(128):
-                        new_time.append(data[i][pitch] // 2)
+                        new_time.append(data[i][pitch] // sample_rate)
                     new_data.append(new_time)
             return np.array(new_data)
         if data_type == 'c':
-            return data[::2]
+            sample_rate = 2 if len(data) < 128 else 4
+            return data[::sample_rate]
 
     def pr2tracks(self):
         track = []

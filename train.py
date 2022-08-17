@@ -16,7 +16,7 @@ from torch import optim
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 readme_fn = './train.py'
 batch_size = 128
-n_epoch = 6
+n_epoch = 12
 clip = 1
 parallel = False
 weights = [1, 0.5]
