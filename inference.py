@@ -202,7 +202,7 @@ def inference(chord_table, acc_emsemble):
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
         est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
-        print(float(loss[1]))
+        print(format((1 - loss[1]) * 100, '.3f') + '%')
         midiReGen = accomapnimentGeneration(est_x, 120)
         return midiReGen
 
@@ -290,11 +290,11 @@ def note_time_to_pos(time):
 
 
 if __name__ == '__main__':
-    path = 'recon_test/test2.mid'
+    path = 'recon_test/test3.mid'
     midi = pyd.PrettyMIDI(path)
     chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
     chord_table = chord_table[::4, :]
     acc_emsemble = midi2pr_new(midi.instruments[0])
     print(chord_table.shape, acc_emsemble.shape)
     gen = inference(chord_table, acc_emsemble)
-    gen.write('gen2.mid')
+    gen.write('gen3.mid')
