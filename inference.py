@@ -6,6 +6,7 @@ import torch
 import pretty_midi as pyd
 from model import DisentangleVAE
 from ptvae import PtvaeDecoder
+import os
 
 
 def chordSplit(chord, WINDOWSIZE=8, HOPSIZE=8):
@@ -177,7 +178,7 @@ def chord_data2matrix(chord_track, downbeats, resolution='beat', chord_expand=Tr
     return np.array(ChordTable)
 
 
-def inference(chord_table, acc_emsemble):
+def inference(chord_table, acc_emsemble, idx):
     acc_emsemble = melodySplit(acc_emsemble, WINDOWSIZE=32, HOPSIZE=32, VECTORSIZE=128)
     chord_table = chordSplit(chord_table, 8, 8)
     if torch.cuda.is_available():
@@ -202,7 +203,8 @@ def inference(chord_table, acc_emsemble):
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
         est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
-        print(format((1 - loss[1]) * 100, '.3f') + '%')
+        # print(format((1 - loss[1]) * 100, '.3f') + '%')
+        d[idx] = float(loss[1])
         midiReGen = accomapnimentGeneration(est_x, 120)
         return midiReGen
 
@@ -290,11 +292,17 @@ def note_time_to_pos(time):
 
 
 if __name__ == '__main__':
-    path = 'recon_test/test3.mid'
-    midi = pyd.PrettyMIDI(path)
-    chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
-    chord_table = chord_table[::4, :]
-    acc_emsemble = midi2pr_new(midi.instruments[0])
-    print(chord_table.shape, acc_emsemble.shape)
-    gen = inference(chord_table, acc_emsemble)
-    gen.write('gen3.mid')
+    d = {}
+    for filename in os.listdir('test2'):
+        path = os.path.join('test2', filename)
+        idx = int(filename.split('.')[0])
+        midi = pyd.PrettyMIDI(path)
+        chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
+        chord_table = chord_table[::4, :]
+        acc_emsemble = midi2pr_new(midi.instruments[0])
+        gen = inference(chord_table, acc_emsemble, idx)
+        print(d[idx])
+
+    print(d)
+
+        # gen.write('gen3.mid')
