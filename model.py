@@ -163,8 +163,11 @@ class DisentangleVAE(PytorchModel):
                                                min_pitch=0,
                                                pitch_pad_ind=130,
                                                pitch_sos_ind=128,
-                                               pitch_eos_ind=129) for i in pr_mat])
-            x = torch.from_numpy(x)
+                                               pitch_eos_ind=129) for i in pr_mat.cpu()])
+            if torch.cuda.is_available():
+                x = torch.from_numpy(x).type(torch.LongTensor).cuda()
+            else:
+                x = torch.from_numpy(x)
 
         def loss_for_inference(x, c, beta=0.1, weights=(1, 0.5)):
             outputs = pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, \
