@@ -179,11 +179,12 @@ def chord_data2matrix(chord_track, downbeats, resolution='beat', chord_expand=Tr
 
 
 def inference(chord_table, acc_emsemble, idx):
+    global d
     acc_emsemble = melodySplit(acc_emsemble, WINDOWSIZE=32, HOPSIZE=32, VECTORSIZE=128)
     chord_table = chordSplit(chord_table, 8, 8)
     if torch.cuda.is_available():
         model = DisentangleVAE.init_model(torch.device('cuda')).cuda()
-        checkpoint = torch.load('data/train_20220806.pt')
+        checkpoint = torch.load('data/train_20220818.pt')
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float().cuda()
         # pr_matrix_shifted = torch.from_numpy(pr_matrix_shifted).float().cuda()
@@ -193,19 +194,19 @@ def inference(chord_table, acc_emsemble, idx):
         print(int(loss[1]))
         # print('est:', est_x.shape)
         # est_x_shifted = model.inference(pr_matrix_shifted, gt_chord, sample=False)
-        midiReGen = accomapnimentGeneration(est_x, 120)
+        midiReGen = accomapnimentGeneration(est_x, 30)
         return midiReGen
         # midiReGen.write('accompaniment_test_NEW.mid')
     else:
         model = DisentangleVAE.init_model(torch.device('cpu'))
-        checkpoint = torch.load('data/train_20220806.pt', map_location=torch.device('cpu'))
+        checkpoint = torch.load('data/train_20220818.pt', map_location=torch.device('cpu'))
         model.load_state_dict(checkpoint)
         pr_matrix = torch.from_numpy(acc_emsemble).float()
         gt_chord = torch.from_numpy(chord_table).float()
         est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
         # print(format((1 - loss[1]) * 100, '.3f') + '%')
         d[idx] = float(loss[1])
-        midiReGen = accomapnimentGeneration(est_x, 120)
+        midiReGen = accomapnimentGeneration(est_x, 30)
         return midiReGen
 
 
@@ -243,15 +244,15 @@ def pr2midi(pr):
     return
 
 
-def midi2pr_new(track):
+def midi2pr_new(track, down_sample=1):
     midi = pretty_midi.PrettyMIDI()
     midi.instruments.append(track)
     notes, _, _ = midi_to_source_base(midi)
-    max_end = max(notes, key=lambda x: x[1])[1]
+    max_end = max(notes, key=lambda x: x[1])[1] // down_sample
     pr = np.zeros((max_end, 128))
     for note in notes:
-        duration = note[1] - note[0]
-        pr[note[0], note[2]] = duration
+        duration = (note[1] - note[0]) // down_sample
+        pr[(note[0]) // down_sample, note[2]] = duration
     return pr
 
 
@@ -293,15 +294,15 @@ def note_time_to_pos(time):
 
 if __name__ == '__main__':
     d = {}
-    for filename in os.listdir('test2'):
-        path = os.path.join('test2', filename)
+    for filename in os.listdir('test'):
+        path = os.path.join('test', filename)
         idx = int(filename.split('.')[0])
         midi = pyd.PrettyMIDI(path)
         chord_table = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quater')
         chord_table = chord_table[::4, :]
         acc_emsemble = midi2pr_new(midi.instruments[0])
         gen = inference(chord_table, acc_emsemble, idx)
-        print(d[idx])
+        print(d)
 
     print(d)
 
