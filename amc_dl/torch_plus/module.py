@@ -133,7 +133,7 @@ class TrainingInterface:
 
         for i, batch in enumerate(self.data_loaders.train_loader):
             # TODO: why the inputs' element number is 4
-            inputs = self._batch_to_inputs(batch)[:3]
+            inputs = self._batch_to_inputs(batch)[:-1]
             self.opt_scheduler.optimizer_zero_grad()
             input_params = self.param_scheduler.step()
             outputs = self.model('train', *inputs, **input_params)

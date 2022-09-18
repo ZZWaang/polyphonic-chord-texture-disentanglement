@@ -1,13 +1,16 @@
 from converter import ext_nmat_to_nmat, nmat_to_notes
 import pretty_midi as pm
 import numpy as np
+
+from polydis2_utils import extract_voicing_from_8d_nmat
+
 np.set_printoptions(threshold=np.inf)
 
 
 class PolyphonicMusic:
 
     def __init__(self, tracks, beat_table, chord_table, instrument_list=None,
-                 track_name_list=None, bpm=120.):
+                 track_name_list=None, bpm=120., prepare_voicing=False):
         self.tracks = tracks
         # self.beat_table = beat_table
         assert beat_table.shape[0] == chord_table.shape[0]
@@ -25,6 +28,7 @@ class PolyphonicMusic:
         else:
             self.track_name_list = track_name_list
         self.bpm = bpm
+        self.prepare_voicing = prepare_voicing
 
     def _select_track(self, track_ind=None, track_name=None):
         if track_ind is None and track_name is None:
@@ -104,8 +108,12 @@ class PolyphonicMusic:
             tracks = broken_tracks[i]
             mel_track = translate_track(merge(tracks, mel_id), db_pos[i])
             acc_track = translate_track(merge(tracks, acc_id), db_pos[i])
+            voicing_track = extract_voicing_from_8d_nmat(acc_track)
             chord = broken_chords[i]
-            data_track.append([mel_track, acc_track, chord])
+            if self.prepare_voicing:
+                data_track.append([mel_track, acc_track, chord, voicing_track])
+            else:
+                data_track.append([mel_track, acc_track, chord])
             if mel_track is None and acc_track is None:
                 indicator[i] = 0
                 continue

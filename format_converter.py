@@ -174,12 +174,17 @@ def pr2midi(pr):
     ins.notes = all_notes
     midi = pyd.PrettyMIDI()
     midi.instruments.append(ins)
-    return
+    return midi
 
 
 def midi2pr(track, down_sample=1):
-    midi = pyd.PrettyMIDI()
-    midi.instruments.append(track)
+    if isinstance(track, pyd.Instrument):
+        midi = pyd.PrettyMIDI()
+        midi.instruments.append(track)
+    elif isinstance(track, pyd.PrettyMIDI):
+        midi = track
+    else:
+        raise Exception
     notes, _, _ = midi_to_source_base(midi)
     max_end = max(notes, key=lambda x: x[1])[1] // down_sample
     pr = np.zeros((max_end, 128))
