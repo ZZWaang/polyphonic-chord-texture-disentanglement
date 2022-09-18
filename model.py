@@ -319,6 +319,13 @@ class DisentangleVoicingTextureVAE(PytorchModel):
         loss = recon_loss + beta * kl_loss + recon_loss_c
         return loss, recon_loss, pl, dl, kl_loss, kl_chd, kl_rhy, recon_loss_c, pl_c, dl_c
 
+    def kl_loss(self, *dists):
+        # kl = kl_with_normal(dists[0])
+        kl_chd = kl_with_normal(dists[0])
+        kl_rhy = kl_with_normal(dists[1])
+        kl_loss = kl_chd + kl_rhy
+        return kl_loss, kl_chd, kl_rhy
+
     @staticmethod
     def init_model(device=None, voicing_size=256, txt_size=256, num_channel=10):
         name = 'disvae2'
