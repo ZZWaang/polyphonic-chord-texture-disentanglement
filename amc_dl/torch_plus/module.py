@@ -165,7 +165,7 @@ class TrainingInterface:
         epoch_loss_dic = self._init_loss_dic()
 
         for i, batch in enumerate(self.data_loaders.val_loader):
-            inputs = self._batch_to_inputs(batch)[:3]
+            inputs = self._batch_to_inputs(batch)[:-1]
             input_params = self.param_scheduler.step()
             with torch.no_grad():
                 outputs = self.model('train', *inputs, **input_params)
