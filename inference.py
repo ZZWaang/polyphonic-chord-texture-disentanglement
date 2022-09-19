@@ -1,46 +1,42 @@
-import random
-
 import numpy as np
-np.set_printoptions(threshold=10000)
+import pretty_midi
 import torch
 import pretty_midi as pyd
-from model import DisentangleVAE
-from ptvae import PtvaeDecoder
-import os
 
+from model import DisentangleVAE, DisentangleVoicingTextureVAE
+from ptvae import PtvaeDecoder
 from format_converter import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
     chord_stretch, pr_stretch
 
+np.set_printoptions(threshold=10000)
 
-def inference(chord_table, acc_ensemble, checkpoint='data/model_master_final.pt'):
+
+def inference_stage1(chord_table, acc_ensemble, checkpoint='data/model_master_final.pt'):
     acc_ensemble = melody_split(acc_ensemble, window_size=32, hop_size=32, vector_size=128)
     chord_table = chord_split(chord_table, 8, 8)
-    if torch.cuda.is_available():
-        model = DisentangleVAE.init_model(torch.device('cuda')).cuda()
-        checkpoint = torch.load(checkpoint)
-        model.load_state_dict(checkpoint)
-        pr_matrix = torch.from_numpy(acc_ensemble).float().cuda()
-        # pr_matrix_shifted = torch.from_numpy(pr_matrix_shifted).float().cuda()
-        gt_chord = torch.from_numpy(chord_table).float().cuda()
-        # print(gt_chord.shape, pr_matrix.shape)
-        est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
-        print(float(loss[1]))
-        # loss_list.append(float(loss[1]))
-        # print('est:', est_x.shape)
-        # est_x_shifted = model.inference(pr_matrix_shifted, gt_chord, sample=False)
-        midi_re_gen = accompaniment_generation(est_x, 30)
-        return midi_re_gen
-        # midiReGen.write('accompaniment_test_NEW.mid')
-    else:
-        model = DisentangleVAE.init_model(torch.device('cpu'))
-        checkpoint = torch.load(checkpoint, map_location=torch.device('cpu'))
-        model.load_state_dict(checkpoint)
-        pr_matrix = torch.from_numpy(acc_ensemble).float()
-        gt_chord = torch.from_numpy(chord_table).float()
-        est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
-        # print(format((1 - loss[1]) * 100, '.3f') + '%')
-        midi_re_gen = accompaniment_generation(est_x, 30)
-        return midi_re_gen
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    model = DisentangleVAE.init_model(device).to(device)
+    checkpoint = torch.load(checkpoint, map_location=device)
+    model.load_state_dict(checkpoint)
+    pr_matrix = torch.from_numpy(acc_ensemble).float().to(device)
+    gt_chord = torch.from_numpy(chord_table).float().to(device)
+    est_x, loss = model.inference_with_loss(pr_matrix, gt_chord, sample=False)
+    midi_re_gen = accompaniment_generation(est_x, 30)
+    return midi_re_gen
+
+
+def inference_stage2(voicing, acc, checkpoint):
+    acc = melody_split(acc, window_size=32, hop_size=32, vector_size=128)
+    voicing = melody_split(voicing, window_size=32, hop_size=32, vector_size=128)
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    model = DisentangleVoicingTextureVAE.init_model(device).to(device)
+    checkpoint = torch.load(checkpoint, map_location=device)
+    model.load_state_dict(checkpoint)
+    acc = torch.from_numpy(acc).float().to(device)
+    voicing = torch.from_numpy(voicing).float().to(device)
+    est_x, loss = model.inference(acc, voicing, sample=False)
+    midi_re_gen = accompaniment_generation(est_x, 120)
+    return midi_re_gen
 
 
 def accompaniment_generation(pr_matrix, tempo=120):
@@ -63,7 +59,7 @@ def accompaniment_generation(pr_matrix, tempo=120):
     return midi_re_gen
 
 
-def inference_voicing_disentanglement_8_bars_segment(c_path, v_path=None, checkpoint='data/train_20220806.pt'):
+def inference_chord_voicing_disentanglement(c_path, v_path=None, checkpoint='data/train_20220806.pt'):
     midi = pyd.PrettyMIDI(c_path)
     c = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quarter')
     c = c[::16, :]
@@ -89,11 +85,26 @@ def inference_voicing_disentanglement_8_bars_segment(c_path, v_path=None, checkp
             else:
                 c = np.concatenate((c[:-2, :], chord_stretch(c[-2:, :], 2)))
                 v = np.concatenate((v[:-8, :], pr_stretch(v[-8:, :], 2)))
-    return inference(c, v, checkpoint)
+    return inference_stage1(c, v, checkpoint)
+
+
+def inference_chord_voicing_texture_disentanglement(chord_provider: str,
+                                                    voicing_provider: str,
+                                                    texture_provider: str,
+                                                    stage1_checkpoint: str,
+                                                    stage2_checkpoint: str) -> pretty_midi.PrettyMIDI:
+    pass
 
 
 if __name__ == '__main__':
-    recon = inference_voicing_disentanglement_8_bars_segment(r'test\16667.mid',
-                                                             r'test\17134.mid',
-                                                             'data/train_20220818.pt')
-    recon.write('c16667+v17134.mid')
+    CHORD_PATH = ''
+    VOICING_PATH = ''
+    TEXTURE_PATH = ''
+    STAGE1_CP = ''
+    STAGE2_CP = ''
+    WRITE_PATH = ''
+    inference_chord_voicing_texture_disentanglement(chord_provider=CHORD_PATH,
+                                                    voicing_provider=VOICING_PATH,
+                                                    texture_provider=TEXTURE_PATH,
+                                                    stage1_checkpoint=STAGE1_CP,
+                                                    stage2_checkpoint=STAGE2_CP).write(WRITE_PATH)

@@ -300,7 +300,7 @@ class DisentangleVoicingTextureVAE(PytorchModel):
     def inference(self, pr_mat, c, sample):
         self.eval()
         with torch.no_grad():
-            dist_chd = self.chd_encoder(c)
+            dist_chd = self.voicing_encoder(c)
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
