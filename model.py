@@ -7,7 +7,7 @@ import numpy as np
 
 from converter import target_to_3dtarget
 from ptvae import RnnEncoder, RnnDecoder, PtvaeDecoder, \
-    TextureEncoder
+    TextureEncoder, RnnDecoder2
 
 
 class DisentangleVAE(PytorchModel):
@@ -54,7 +54,7 @@ class DisentangleVAE(PytorchModel):
         recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chd, False,
                                                                 tfr3, c)
         return pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, \
-            recon_chroma, recon_bass
+               recon_chroma, recon_bass
 
     def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
                       dist_rhy, recon_root, recon_chroma, recon_bass,
@@ -139,12 +139,12 @@ class DisentangleVAE(PytorchModel):
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
 
             x = np.array([target_to_3dtarget(i,
-                                               max_note_count=16,
-                                               max_pitch=128,
-                                               min_pitch=0,
-                                               pitch_pad_ind=130,
-                                               pitch_sos_ind=128,
-                                               pitch_eos_ind=129) for i in pr_mat.cpu()])
+                                             max_note_count=16,
+                                             max_pitch=128,
+                                             min_pitch=0,
+                                             pitch_pad_ind=130,
+                                             pitch_sos_ind=128,
+                                             pitch_eos_ind=129) for i in pr_mat.cpu()])
             if torch.cuda.is_available():
                 x = torch.from_numpy(x).type(torch.LongTensor).cuda()
             else:
@@ -309,6 +309,21 @@ class DisentangleVoicingTextureVAE(PytorchModel):
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
         return est_x
 
+    def inference_with_chord_decode(self, pr_mat, c, sample):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.voicing_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            pitch_outs_c, dur_outs_c = self.voicing_decoder(z_chd, True, None,
+                                                            None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+            est_x_c, _, _ = self.voicing_decoder.output_to_numpy(pitch_outs_c, dur_outs_c)
+        return est_x, est_x_c
+
     def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
                       dist_rhy, recon_pitch_c, recon_dur_c,
                       beta, weights, weighted_dur=False):
@@ -339,16 +354,16 @@ class DisentangleVoicingTextureVAE(PytorchModel):
         # pt_encoder = PtvaeEncoder(device=device, z_size=152)
         # chd_decoder = RnnDecoder(z_dim=256)
         voicing_decoder = PtvaeDecoder(note_embedding=None,
-                                  dec_dur_hid_size=64,
-                                  z_size=voicing_size)
+                                       dec_dur_hid_size=64,
+                                       z_size=voicing_size)
         # pt_decoder = PtvaeDecoder(note_embedding=None,
         #                           dec_dur_hid_size=64, z_size=512)
         pt_decoder = PtvaeDecoder(note_embedding=None,
                                   dec_dur_hid_size=64,
                                   z_size=voicing_size + txt_size)
 
-        model = DisentangleVAE(name, device, voicing_encoder,
-                               rhy_encoder, pt_decoder, voicing_decoder)
+        model = DisentangleVoicingTextureVAE(name, device, voicing_encoder,
+                                             rhy_encoder, pt_decoder, voicing_decoder)
         return model
 
     def run(self, x, c, pr_mat, pr_mat_c, tfr1, tfr2, tfr3, confuse=True):
@@ -364,3 +379,90 @@ class DisentangleVoicingTextureVAE(PytorchModel):
                                             lengths, tfr1, tfr2)
         pitch_outs_c, dur_outs_c = self.voicing_decoder(z_voicing, False, embedded_c, lengths_c, tfr1, tfr2)
         return pitch_outs, dur_outs, dist_voicing, dist_rhy, pitch_outs_c, dur_outs_c
+
+
+class DisentangleVoicingTextureVAETest(PytorchModel):
+
+    def __init__(self, name, device, voicing_encoder, rhy_encoder, decoder,
+                 voicing_decoder):
+        super(DisentangleVoicingTextureVAETest, self).__init__(name, device)
+        self.voicing_encoder = voicing_encoder
+        self.rhy_encoder = rhy_encoder
+        self.decoder = decoder
+        self.voicing_decoder = voicing_decoder
+
+    def loss(self, x, c, pr_mat, pr_mat_c, tfr1=0., tfr2=0., tfr3=0.,
+             beta=0.1, weights=(1, 0.5)):
+        outputs = self.run(x, c, pr_mat, pr_mat_c, tfr1, tfr2, tfr3)
+        loss = self.loss_function(x, c, *outputs, beta, weights)
+        return loss
+
+    def inference(self, pr_mat, c, sample):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.voicing_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+        return est_x
+
+    def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
+                      dist_rhy, recon_root, recon_chroma, recon_bass,
+                      beta, weights, weighted_dur=False):
+        recon_loss, pl, dl = self.decoder.recon_loss(x, recon_pitch, recon_dur,
+                                                     weights, weighted_dur)
+        kl_loss, kl_chd, kl_rhy = self.kl_loss(dist_chd, dist_rhy)
+        chord_loss, root_loss, chroma_loss, bass_loss = self.chord_loss(c, recon_root, recon_chroma, recon_bass)
+        loss = recon_loss + beta * kl_loss + chord_loss
+        return loss, recon_loss, pl, dl, kl_loss, kl_chd, kl_rhy, chord_loss, root_loss, chroma_loss, bass_loss
+
+    def kl_loss(self, *dists):
+        # kl = kl_with_normal(dists[0])
+        kl_chd = kl_with_normal(dists[0])
+        kl_rhy = kl_with_normal(dists[1])
+        kl_loss = kl_chd + kl_rhy
+        return kl_loss, kl_chd, kl_rhy
+
+    def chord_loss(self, c, recon_root, recon_chroma, recon_bass):
+        pass
+
+    @staticmethod
+    def init_model(device=None, voicing_size=256, txt_size=256, num_channel=10):
+        name = 'disvae2'
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available()
+                                  else 'cpu')
+        # chd_encoder = RnnEncoder(36, 1024, 256)
+        voicing_encoder = TextureEncoder(256, 1024, txt_size, num_channel)
+        # rhy_encoder = TextureEncoder(256, 1024, 256)
+        rhy_encoder = TextureEncoder(256, 1024, txt_size, num_channel)
+        # pt_encoder = PtvaeEncoder(device=device, z_size=152)
+        # chd_decoder = RnnDecoder(z_dim=256)
+        voicing_decoder = RnnDecoder2(z_dim=voicing_size)
+        # pt_decoder = PtvaeDecoder(note_embedding=None,
+        #                           dec_dur_hid_size=64, z_size=512)
+        pt_decoder = PtvaeDecoder(note_embedding=None,
+                                  dec_dur_hid_size=64,
+                                  z_size=voicing_size + txt_size)
+
+        model = DisentangleVoicingTextureVAETest(name, device, voicing_encoder,
+                                                 rhy_encoder, pt_decoder, voicing_decoder)
+        return model
+
+    def run(self, x, c, pr_mat, pr_mat_c, tfr1, tfr2, tfr3, confuse=True):
+        embedded_x, lengths = self.decoder.emb_x(x)
+        embedded_c, lengths_c = self.voicing_decoder.emb_x(c)
+        # cc = self.get_chroma(pr_mat)
+        dist_voicing = self.voicing_encoder(pr_mat_c)
+        # pr_mat = self.confuse_prmat(pr_mat)
+        dist_rhy = self.rhy_encoder(pr_mat)
+        z_voicing, z_rhy = get_zs_from_dists([dist_voicing, dist_rhy], True)
+        dec_z = torch.cat([z_voicing, z_rhy], dim=-1)
+        pitch_outs, dur_outs = self.decoder(dec_z, False, embedded_x,
+                                            lengths, tfr1, tfr2)
+        recon_root, recon_chroma, recon_bass = self.chd_decoder(z_voicing, False,
+                                                                tfr3, c)
+        return pitch_outs, dur_outs, dist_voicing, dist_rhy, recon_root, recon_chroma, recon_bass

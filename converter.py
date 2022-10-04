@@ -162,3 +162,15 @@ def expand_chord(chord, shift, relative=False):
     # print(chroma)
     # print('----------')
     return np.concatenate([root_onehot, chroma, bass_onehot])
+
+
+def extract_voicing_chroma_from_pr(pr):
+    all_pitches = set(pr[:, 6])
+    num_samples = int(((pr[-1][3] + pr[-1][4] / pr[-1][5]) - (pr[0][0] + pr[0][1] / pr[0][2])))
+    voicing_chroma = np.zeros((num_samples, 128))
+    for pitch in all_pitches:
+        voicing_chroma[:, pitch] = 1
+    if num_samples < 4:
+        voicing_chroma = np.concatenate((voicing_chroma, np.zeros((4-num_samples, 128))))
+    return voicing_chroma
+

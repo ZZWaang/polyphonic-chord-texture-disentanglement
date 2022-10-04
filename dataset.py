@@ -8,7 +8,7 @@ from score import PolyphonicMusic, NikoChordProgression
 from torch.utils.data import DataLoader
 from converter import ext_nmat_to_pr, ext_nmat_to_mel_pr, \
     augment_pr, augment_mel_pr, pr_to_onehot_pr, piano_roll_to_target, \
-    target_to_3dtarget, expand_chord
+    target_to_3dtarget, expand_chord, extract_voicing_chroma_from_pr
 
 DATA_PATH = os.path.join('data', 'POP09-PIANOROLL-4-bin-quantization')
 INDEX_FILE_PATH = os.path.join('data', 'index.xlsx')
@@ -110,27 +110,24 @@ class ArrangementDataset(Dataset):
 
         pr_mats_voicing = None
         p_grids_voicing = None
+        voicing_chroma = None
 
         if self.contain_voicing:
             voicing = [x[3] for x in data]
             voicing_segments = [ext_nmat_to_pr(self._combine_segments(voicing[i: i + 2]))
                                 for i in range(0, self.num_bar, 2)]
             voicing_segments = np.array([augment_pr(pr, shift) for pr in voicing_segments])
-
+            voicing_chroma = [extract_voicing_chroma_from_pr(voicing_pr) for voicing_pr in voicing]
             prs_voicing = np.array([pr_to_onehot_pr(pr) for pr in voicing_segments])
             pr_mats_voicing = np.array([piano_roll_to_target(pr) for pr in prs_voicing])
-            try:
-                p_grids_voicing = np.array([target_to_3dtarget(pr_mat_voicing,
-                                                               max_note_count=16,
-                                                               max_pitch=128,
-                                                               min_pitch=0,
-                                                               pitch_pad_ind=130,
-                                                               pitch_sos_ind=128,
-                                                               pitch_eos_ind=129)
-                                            for pr_mat_voicing in pr_mats_voicing])
-            except IndexError:
-                print(data)
-                raise Exception
+            p_grids_voicing = np.array([target_to_3dtarget(pr_mat_voicing,
+                                                           max_note_count=16,
+                                                           max_pitch=128,
+                                                           min_pitch=0,
+                                                           pitch_pad_ind=130,
+                                                           pitch_sos_ind=128,
+                                                           pitch_eos_ind=129)
+                                        for pr_mat_voicing in pr_mats_voicing])
             # for this task
             pr_mats_voicing = pr_mats_voicing[0]
             p_grids_voicing = p_grids_voicing[0]
@@ -143,12 +140,12 @@ class ArrangementDataset(Dataset):
             # chord = np.repeat(chord, self.ts, axis=0)
             # dt_x = detrend_pianotree(p_grids, chord)  # (32, 16, 39)
             if self.contain_voicing:
-                return mel_segments, prs, pr_mats, p_grids, chord, np.array([]), pr_mats_voicing, p_grids_voicing
+                return mel_segments, prs, pr_mats, p_grids, chord, np.array([]), pr_mats_voicing, p_grids_voicing, voicing_chroma
             else:
                 return mel_segments, prs, pr_mats, p_grids, chord, np.array([])
         else:
             if self.contain_voicing:
-                return mel_segments, prs, pr_mats, p_grids, pr_mats_voicing, p_grids_voicing
+                return mel_segments, prs, pr_mats, p_grids, pr_mats_voicing, p_grids_voicing, voicing_chroma
             else:
                 return mel_segments, prs, pr_mats, p_grids
 

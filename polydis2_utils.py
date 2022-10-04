@@ -1,4 +1,6 @@
 import copy
+import os
+import random
 from typing import Sequence
 
 import numpy as np
@@ -64,6 +66,16 @@ def extract_voicing_from_8d_nmat(nmat):
         all_pitches.append(nmat[cursor][6])
         cursor += 1
     return new_nmat
+
+
+def generate_pop909_test_sample():
+    root = r'D:\research\POP909 Phrase Split Data\POP909 Phrase Split Data\Phrase Split Data'
+    folder_path = os.path.join(root, random.choice(list(os.listdir(root))))
+    file_path = os.path.join(folder_path, random.choice(list(os.listdir(folder_path))))
+    while 'midi' in file_path and '8' not in file_path:
+        file_path = os.path.join(folder_path, random.choice(list(os.listdir(folder_path))))
+    data = np.load(file_path)['piano']
+    return pr2midi(data)
 
 
 if __name__ == '__main__':

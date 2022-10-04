@@ -87,6 +87,49 @@ class RnnDecoder(nn.Module):
         return recon_root, recon_chroma, recon_bass
 
 
+class RnnDecoder2(nn.Module):
+
+    def __init__(self, input_dim=128, z_input_dim=256,
+                 hidden_dim=512, z_dim=256, num_step=32):
+        super(RnnDecoder2, self).__init__()
+        self.z2dec_hid = nn.Linear(z_dim, hidden_dim)
+        self.z2dec_in = nn.Linear(z_dim, z_input_dim)
+        self.gru = nn.GRU(input_dim + z_input_dim, hidden_dim,
+                          batch_first=True,
+                          bidirectional=False)
+        self.init_input = nn.Parameter(torch.rand(128))
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.z_dim = z_dim
+        self.pitch_out = nn.Linear(hidden_dim, 256)
+        self.num_step = num_step
+
+    def forward(self, z_chd, inference, tfr, c=None):
+        # z_chd: (B, z_chd_size)
+        bs = z_chd.size(0)
+        z_chd_hid = self.z2dec_hid(z_chd).unsqueeze(0)
+        z_chd_in = self.z2dec_in(z_chd).unsqueeze(1)
+        if inference:
+            tfr = 0.
+        token = self.init_input.repeat(bs, 1).unsqueeze(1)
+        recon_pitch = []
+
+        for t in range(int(self.num_step / 4)):
+            chd, z_chd_hid = \
+                self.gru(torch.cat([token, z_chd_in], dim=-1), z_chd_hid)
+            r_pitch = self.pitch_out(chd).view(bs, 1, 128, 2).contiguous()
+            recon_pitch.append(r_pitch)
+            t_pitch = r_pitch.max(-1)[-1].float()
+            token = t_pitch
+            if t == self.num_step - 1:
+                break
+            teacher_force = random.random() < tfr
+            if teacher_force and not inference:
+                token = c[:, t].unsqueeze(1)
+        recon_pitch = torch.cat(recon_pitch, dim=1)
+        return recon_pitch
+
+
 class TextureEncoder(nn.Module):
 
     def __init__(self, emb_size, hidden_dim, z_dim, num_channel=10):
@@ -447,7 +490,7 @@ class PtvaeDecoder(nn.Module):
             x_summarized = pack_padded_sequence(x_summarized, lengths.view(-1).int().cpu(),
                                                 batch_first=True,
                                                 enforce_sorted=False)
-            x_summarized = self.dec_notes_emb_gru(x_summarized)[-1].\
+            x_summarized = self.dec_notes_emb_gru(x_summarized)[-1]. \
                 transpose(0, 1).contiguous()
             x_summarized = x_summarized.view(-1, self.num_step,
                                              2 * self.dec_emb_hid_size)
@@ -481,7 +524,7 @@ class PtvaeDecoder(nn.Module):
                                              predicted_lengths.int().cpu(),
                                              batch_first=True,
                                              enforce_sorted=False)
-                token = self.dec_notes_emb_gru(token)[-1].\
+                token = self.dec_notes_emb_gru(token)[-1]. \
                     transpose(0, 1).contiguous()
                 token = token.view(-1, 2 * self.dec_emb_hid_size).unsqueeze(1)
         pitch_outs = torch.cat(pitch_outs, dim=1)
@@ -573,4 +616,3 @@ class PtvaeDecoder(nn.Module):
                     pretty_midi.Note(100, int(pitch), start + t * alpha,
                                      start + (t + dur) * alpha))
         return pr, notes
-
