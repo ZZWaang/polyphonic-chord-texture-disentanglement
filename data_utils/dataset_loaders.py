@@ -1,4 +1,4 @@
-from dataset import prepare_dataset_niko, prepare_dataset, prepare_dataset_pop909_voicing
+from data_utils.dataset import prepare_dataset_niko, prepare_dataset, prepare_dataset_pop909_voicing
 from amc_dl.torch_plus import DataLoaders
 from amc_dl.torch_plus import TrainingInterface
 
@@ -22,21 +22,13 @@ class MusicDataLoaders(DataLoaders):
             raise Exception
         return MusicDataLoaders(train, val, bs_train, bs_val)
 
-    def batch_to_inputs(self, batch):
-        _, _, pr_mat, x, c, dt_x = batch
-        pr_mat = pr_mat.to(self.device).float()
-        x = x.to(self.device).long()
-        c = c.to(self.device).float()
-        dt_x = dt_x.to(self.device).float()
-        return x, c, pr_mat, dt_x
-
 
 class TrainingVAE(TrainingInterface):
 
     def _batch_to_inputs(self, batch):
 
-        assert len(batch) == 6 or len(batch) == 9
-        if len(batch) == 7:
+        assert len(batch) == 6 or len(batch) == 8
+        if len(batch) == 6:
             _, _, pr_mat, x, c, dt_x = batch
             pr_mat = pr_mat.to(self.device).float()
             x = x.to(self.device).long()
@@ -44,10 +36,10 @@ class TrainingVAE(TrainingInterface):
             dt_x = dt_x.to(self.device).float()
             return x, c, pr_mat, dt_x
         else:
-            _, _, pr_mat, x, c, dt_x, pr_mat_voicing, x_voicing, c_voicing = batch
+            _, _, pr_mat, x, c, dt_x, pr_mat_voicing, x_voicing = batch
             pr_mat_voicing = pr_mat_voicing.to(self.device).float()
             pr_mat = pr_mat.to(self.device).float()
             x = x.to(self.device).long()
             x_voicing = x_voicing.to(self.device).long()
             dt_x = dt_x.to(self.device).float()
-            return x, x_voicing, pr_mat, pr_mat_voicing, c_voicing, dt_x
+            return x, x_voicing, pr_mat, pr_mat_voicing, dt_x

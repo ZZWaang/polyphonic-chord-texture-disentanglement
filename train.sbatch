@@ -20,4 +20,4 @@ conda activate /scratch/ly1387/polydis2;
 export PATH=/scratch/ly1387/polydis2/bin:$PATH;
 
 cd /scratch/ly1387/projects/polydis2/polydis2;
-python train.py
+python train.py --epoch 12 --parallel True --training_stage 2

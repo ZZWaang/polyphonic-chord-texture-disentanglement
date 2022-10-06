@@ -3,11 +3,10 @@ import pretty_midi
 import torch
 import pretty_midi as pyd
 
-from model import DisentangleVAE, DisentangleVoicingTextureVAE
-from ptvae import PtvaeDecoder
-from format_converter import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
-    chord_stretch, pr_stretch, pr2midi
-from polydis2_utils import generate_pop909_test_sample, extract_voicing_from_pr
+from model.model import DisentangleVAE, DisentangleVoicingTextureVAE
+from model.ptvae import PtvaeDecoder
+from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
+    chord_stretch, pr_stretch
 
 np.set_printoptions(threshold=10000)
 

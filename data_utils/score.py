@@ -1,8 +1,8 @@
-from converter import ext_nmat_to_nmat, nmat_to_notes
+from utils.utils import ext_nmat_to_nmat, nmat_to_notes
 import pretty_midi as pm
 import numpy as np
 
-from polydis2_utils import extract_voicing_from_8d_nmat
+from utils.utils import extract_voicing_from_8d_nmat
 
 np.set_printoptions(threshold=np.inf)
 
