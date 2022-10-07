@@ -572,3 +572,27 @@ class PtvaeDecoder(nn.Module):
                     pretty_midi.Note(100, int(pitch), start + t * alpha,
                                      start + (t + dur) * alpha))
         return pr, notes
+
+
+class ZAttention(nn.Module):
+
+    def __init__(self, z_dim=256, emb_dim=256, num_heads=8):
+        super(ZAttention, self).__init__()
+        self.z_dim = z_dim
+        self.num_heads = num_heads
+        self.emb_dim = emb_dim
+        self.wq = nn.Linear(z_dim, emb_dim)
+        self.wk = nn.Linear(z_dim, emb_dim)
+        self.wv = nn.Linear(z_dim, emb_dim)
+        self.multi_attention = nn.MultiheadAttention(emb_dim, num_heads, batch_first=True)
+        self.output_layer = nn.Linear(emb_dim, z_dim*2)
+
+    def forward(self, zv, zt):
+        bs = zv.shape[0]
+        q = self.wq(zv).view(bs, self.emb_dim, 1)
+        k = self.wk(zt).view(bs, self.emb_dim, 1)
+        v = self.wv(zt).view(bs, self.emb_dim, 1)
+        z = self.multi_attention(q, k, v).view(bs, self.emb_dim)
+        z = self.output_layer(z)
+        return z
+

@@ -3,8 +3,8 @@ import pretty_midi
 import torch
 import pretty_midi as pyd
 
-from model.model import DisentangleVAE, DisentangleVoicingTextureVAE
-from model.ptvae import PtvaeDecoder
+from models.model import DisentangleVAE, DisentangleVoicingTextureVAE
+from models.ptvae import PtvaeDecoder
 from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
     chord_stretch, pr_stretch
 

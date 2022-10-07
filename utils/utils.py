@@ -439,23 +439,47 @@ def extract_voicing_from_pr(pr: Sequence, chord_length: int, tail: str = 'same')
 
 
 def extract_voicing_from_8d_nmat(nmat):
+    def calc_note_end(weight):
+        note_end_unit_count = min_time_unit_count + int(length_unit * weight)
+        return note_end_unit_count // min_t[2], note_end_unit_count % min_t[2], min_t[2]
+
     if nmat is None:
         return None
+
+    # calc max end time and min start time
     min_t, max_t = [10000, 0, 4], [0, 0, 4]
     for note in nmat:
         if note[0] + note[1] / note[2] < min_t[0] + min_t[1] / min_t[2]:
             min_t = note[:3]
         if note[3] + note[4] / note[5] > max_t[0] + max_t[1] / max_t[2]:
             max_t = note[3:6]
+
+    # init voicing nmat
     dim0_size = min([14, len(set([note[6] for note in nmat]))])
     new_nmat = np.zeros((dim0_size, 8), dtype=int)
+
+    # calc pitch occurrence for weight
+    pitch_count = {}
+    for i in range(len([note[6] for note in nmat])):
+        if nmat[i][6] in pitch_count.keys():
+            pitch_count[nmat[i][6]] += nmat[i][3] * nmat[i][5] + nmat[i][4] - nmat[i][0] * nmat[i][2] + nmat[i][1]
+        else:
+            pitch_count[nmat[i][6]] = nmat[i][3] * nmat[i][5] + nmat[i][4] - nmat[i][0] * nmat[i][2] + nmat[i][1]
+    pitch_max_occur = max(pitch_count.values())
+    for i in pitch_count:
+        pitch_count[i] = pitch_count[i] / pitch_max_occur
+
+    # calculate voicing
     all_pitches = []
     cursor = 0
+    min_time_unit_count = min_t[0] * min_t[2] + min_t[1]
+    max_time_unit_count = max_t[0] * max_t[2] + max_t[1]
+    length_unit = max_time_unit_count - min_time_unit_count
     for i in range(dim0_size):
         while nmat[cursor][6] in all_pitches:
             cursor += 1
         new_nmat[i][0], new_nmat[i][1], new_nmat[i][2] = min_t[0], min_t[1], min_t[2]
-        new_nmat[i][3], new_nmat[i][4], new_nmat[i][5] = max_t[0], max_t[1], max_t[2]
+        new_nmat[i][3], new_nmat[i][4], new_nmat[i][5] = calc_note_end(pitch_count[nmat[cursor][6]])
         new_nmat[i][6] = nmat[cursor][6]
         new_nmat[i][7] = nmat[cursor][7]
         all_pitches.append(nmat[cursor][6])
@@ -471,3 +495,18 @@ def generate_pop909_test_sample():
         file_path = os.path.join(folder_path, random.choice(list(os.listdir(folder_path))))
     data = np.load(file_path)['piano']
     return pr2midi(data)
+
+
+if __name__ == '__main__':
+    nmat = [
+        [0, 1, 4, 1, 0, 4, 50, 60],
+        [0, 1, 4, 1, 0, 4, 52, 60],
+        [1, 1, 4, 2, 2, 4, 54, 60],
+        [1, 1, 4, 2, 2, 4, 50, 60],
+        [2, 3, 4, 3, 0, 4, 52, 60],
+        [2, 3, 4, 3, 0, 4, 54, 60],
+        [3, 1, 4, 3, 2, 4, 56, 60],
+        [3, 1, 4, 3, 2, 4, 58, 60],
+    ]
+    new = extract_voicing_from_8d_nmat(nmat)
+    print(new)
