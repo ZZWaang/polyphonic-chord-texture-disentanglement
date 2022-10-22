@@ -6,7 +6,7 @@ import pretty_midi as pyd
 from models.model import DisentangleVAE, DisentangleVoicingTextureVAE
 from models.ptvae import PtvaeDecoder
 from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
-    chord_stretch, pr_stretch
+    chord_stretch, pr_stretch, generate_pop909_test_sample, extract_voicing_from_pr, pr2midi
 
 np.set_printoptions(threshold=10000)
 
@@ -127,12 +127,12 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
 
 
 if __name__ == '__main__':
-    PATH = 'experiments/test6/'
+    PATH = 'experiments/20221017/test6/'
     CHORD_PATH = PATH + 'voicing.mid'
     VOICING_PATH = PATH + 'voicing.mid'
     TEXTURE_PATH = PATH + 'texture.mid'
     STAGE1_CP = 'data/train_stage1_20220818.pt'
-    STAGE2_CP = 'data/train_stage2_20220921.pt'
+    STAGE2_CP = 'data/train_stage2_20221009.pt'
     VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
     RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
     RECON_WRITE_PATH = PATH + 'recon.mid'

@@ -2,7 +2,7 @@ import argparse
 import warnings
 
 from models.model import DisentangleVAE, DisentangleVoicingTextureVAE
-from models.ptvae import RnnEncoder, TextureEncoder, PtvaeDecoder, RnnDecoder
+from models.ptvae import RnnEncoder, TextureEncoder, PtvaeDecoder, RnnDecoder, ZAttention
 from data_utils.dataset_loaders import MusicDataLoaders, TrainingVAE
 from data_utils.dataset import SEED
 from amc_dl.torch_plus import LogPathManager, SummaryWriters, ParameterScheduler, OptimizerScheduler, \
@@ -23,6 +23,7 @@ parser.add_argument('--clip', type=int, default=config.clip)
 parser.add_argument('--parallel', type=bool, default=config.parallel)
 parser.add_argument('--training_stage', type=int, default=config.training_stage)
 parser.add_argument('--name', type=str, default=config.name)
+parser.add_argument('--z_attention_emb', type=int, default=config.z_attention_emb)
 
 current_config = parser.parse_args()
 config.device = torch.device(current_config.device) if torch.cuda.is_available() else torch.device('cpu')
@@ -34,6 +35,7 @@ config.training_stage = current_config.training_stage
 config.name = current_config.name
 config.parallel = current_config.parallel if torch.cuda.is_available() and \
                                              torch.cuda.device_count() > 1 else False
+config.z_attention_emb = current_config.z_attention_emb
 
 if config.training_stage == 1:
     chd_encoder = RnnEncoder(36, 1024, 256)
@@ -58,8 +60,9 @@ else:
                                    dec_dur_hid_size=64, z_size=256)
     pt_decoder = PtvaeDecoder(note_embedding=None,
                               dec_dur_hid_size=64, z_size=512)
+    z_attention_layer = ZAttention(256, config.z_attention_emb, 1)
     model = DisentangleVoicingTextureVAE(config.name, config.device, voicing_encoder,
-                                         rhy_encoder, pt_decoder, voicing_decoder)
+                                         rhy_encoder, pt_decoder, voicing_decoder, z_attention_layer)
     data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_voicing',
                                                 bs_train=config.batch_size, bs_val=config.batch_size,
                                                 portion=8, shift_low=-6, shift_high=5,

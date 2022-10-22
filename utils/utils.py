@@ -438,7 +438,31 @@ def extract_voicing_from_pr(pr: Sequence, chord_length: int, tail: str = 'same')
         return voicing
 
 
-def extract_voicing_from_8d_nmat(nmat):
+def pr_to_8d_nmat(pr):
+    nmat = []
+    for current_time in range(len(pr)):
+        for pitch in range(128):
+            if pr[current_time][pitch] != 0:
+                end = current_time + pr[current_time][pitch]
+                note = [current_time // 4, current_time % 4, 4, end // 4, end % 4, 4, pitch, 60]
+                nmat.append(note)
+    return np.array(nmat)
+
+
+def nmat_to_pr(nmat):
+    print(nmat)
+    max_note = max(nmat, key=lambda i: i[3] * i[5] + i[4])
+    max_end = max_note[3] * max_note[5] + max_note[4]
+    pr = np.zeros((int(max_end), 128))
+    for note in nmat:
+        start = note[0] * note[2] + note[1]
+        end = note[3] * note[5] + note[4]
+        dur = end - start
+        pr[start, note[6]] = dur
+    return pr
+
+
+def extract_voicing_from_8d_nmat_2bars(nmat):
     def calc_note_end(weight):
         note_end_unit_count = min_time_unit_count + int(length_unit * weight)
         return note_end_unit_count // min_t[2], note_end_unit_count % min_t[2], min_t[2]
@@ -487,6 +511,22 @@ def extract_voicing_from_8d_nmat(nmat):
     return new_nmat
 
 
+def extract_voicing_from_8d_nmat(nmat):
+    final_nmat = np.zeros((0, 8), dtype=int)
+    for i in range(0, int(max(nmat, key=lambda x: x[3])[3]), 4):
+        segment_nmat = []
+        for note in nmat:
+            if i <= note[0] < i + 4:
+                segment_nmat.append(note)
+        print(segment_nmat)
+        final_nmat = np.concatenate((final_nmat, extract_voicing_from_8d_nmat_2bars(segment_nmat)))
+    return final_nmat
+
+
+def extract_voicing(midi):
+    return pr2midi(nmat_to_pr(extract_voicing_from_8d_nmat(pr_to_8d_nmat(midi2pr(midi)))))
+
+
 def generate_pop909_test_sample():
     root = r'D:\research\POP909 Phrase Split Data\POP909 Phrase Split Data\Phrase Split Data'
     folder_path = os.path.join(root, random.choice(list(os.listdir(root))))
@@ -498,15 +538,4 @@ def generate_pop909_test_sample():
 
 
 if __name__ == '__main__':
-    nmat = [
-        [0, 1, 4, 1, 0, 4, 50, 60],
-        [0, 1, 4, 1, 0, 4, 52, 60],
-        [1, 1, 4, 2, 2, 4, 54, 60],
-        [1, 1, 4, 2, 2, 4, 50, 60],
-        [2, 3, 4, 3, 0, 4, 52, 60],
-        [2, 3, 4, 3, 0, 4, 54, 60],
-        [3, 1, 4, 3, 2, 4, 56, 60],
-        [3, 1, 4, 3, 2, 4, 58, 60],
-    ]
-    new = extract_voicing_from_8d_nmat(nmat)
-    print(new)
+    extract_voicing(pm.PrettyMIDI('../experiments/20221017/test4/texture.mid')).write('v.mid')
