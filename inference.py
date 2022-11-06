@@ -127,7 +127,7 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
 
 
 if __name__ == '__main__':
-    PATH = 'experiments/20221017/test6/'
+    PATH = 'experiments/20221024/test1/'
     CHORD_PATH = PATH + 'voicing.mid'
     VOICING_PATH = PATH + 'voicing.mid'
     TEXTURE_PATH = PATH + 'texture.mid'

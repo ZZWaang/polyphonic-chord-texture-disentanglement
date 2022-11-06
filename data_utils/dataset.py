@@ -30,6 +30,7 @@ class ArrangementDataset(Dataset):
         self.ts = ts
         self.contain_chord = contain_chord
         self.contain_voicing = contain_voicing
+        self.cache = {}
 
     def _get_sample_inds(self):
         valid_inds = []
@@ -66,6 +67,8 @@ class ArrangementDataset(Dataset):
         return self.num_sample * (self.shift_high - self.shift_low + 1)
 
     def __getitem__(self, id):
+        if id in self.cache:
+            return self.cache[id]
         # separate id into (no, shift) pair
         no = id // (self.shift_high - self.shift_low + 1)
         shift = id % (self.shift_high - self.shift_low + 1) + self.shift_low
@@ -110,7 +113,7 @@ class ArrangementDataset(Dataset):
 
         pr_mats_voicing = None
         p_grids_voicing = None
-        voicing_chroma = None
+        voicing_multi_hot = None
 
         if self.contain_voicing:
             voicing = [x[3] for x in data]
@@ -130,23 +133,28 @@ class ArrangementDataset(Dataset):
             # for this task
             pr_mats_voicing = pr_mats_voicing[0]
             p_grids_voicing = p_grids_voicing[0]
+            bar1_multi_hot = np.array([np.logical_or(pr_mats_voicing[0], np.zeros(128))], dtype=int).repeat(16, axis=0)
+            bar2_multi_hot = np.array([np.logical_or(pr_mats_voicing[16], np.zeros(128))], dtype=int).repeat(16, axis=0)
+            voicing_multi_hot = np.concatenate((bar1_multi_hot, bar2_multi_hot), axis=0)
 
         if self.contain_chord:
             chord = [x[2] for x in data]
             chord = np.concatenate(chord, axis=0)
             chord = np.array([expand_chord(c, shift) for c in chord])
-            # chord = chord[:, 12: 24]
-            # chord = np.repeat(chord, self.ts, axis=0)
-            # dt_x = detrend_pianotree(p_grids, chord)  # (32, 16, 39)
-            if self.contain_voicing:
-                return mel_segments, prs, pr_mats, p_grids, chord, np.array([]), pr_mats_voicing, p_grids_voicing
-            else:
-                return mel_segments, prs, pr_mats, p_grids, chord, np.array([])
         else:
-            if self.contain_voicing:
-                return mel_segments, prs, pr_mats, p_grids, pr_mats_voicing, p_grids_voicing
-            else:
-                return mel_segments, prs, pr_mats, p_grids
+            chord = None
+
+        batch_data = {'mel_segments': mel_segments,
+                      'prs': prs,
+                      'pr_mats': pr_mats,
+                      'p_grids': p_grids,
+                      'chord': chord,
+                      'dt_x': np.array([]),
+                      'pr_mats_voicing': pr_mats_voicing,
+                      'p_grids_voicing': p_grids_voicing,
+                      'voicing_multi_hot': voicing_multi_hot}
+        self.cache[id] = batch_data
+        return batch_data
 
 
 def detrend_pianotree(piano_tree, c):

@@ -1,6 +1,6 @@
 device = 'cuda'
 readme_fn = './train.py'
-batch_size = 1
+batch_size = 2
 n_epoch = 12
 clip = 1
 parallel = False
@@ -11,4 +11,4 @@ lr = 1e-3
 name = 'disvae-nozoth'
 training_stage = 2
 
-z_attention_emb = 32
+attention_emb = 32

@@ -1,3 +1,0 @@
-# polyphonic-chord-voicing-texture-disentanglement
-
-Still researching...

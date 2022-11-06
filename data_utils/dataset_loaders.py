@@ -27,19 +27,15 @@ class TrainingVAE(TrainingInterface):
 
     def _batch_to_inputs(self, batch):
 
-        assert len(batch) == 6 or len(batch) == 8
-        if len(batch) == 6:
-            _, _, pr_mat, x, c, dt_x = batch
-            pr_mat = pr_mat.to(self.device).float()
-            x = x.to(self.device).long()
-            c = c.to(self.device).float()
-            dt_x = dt_x.to(self.device).float()
-            return x, c, pr_mat, dt_x
+        if batch['pr_mats_voicing'] is None:
+            return batch['p_grids'].to(self.device).long(), \
+                   batch['chord'].to(self.device).float(), \
+                   batch['pr_mats'].to(self.device).float(), \
+                   batch['dt_x'].to(self.device).float()
         else:
-            _, _, pr_mat, x, c, dt_x, pr_mat_voicing, x_voicing = batch
-            pr_mat_voicing = pr_mat_voicing.to(self.device).float()
-            pr_mat = pr_mat.to(self.device).float()
-            x = x.to(self.device).long()
-            x_voicing = x_voicing.to(self.device).long()
-            dt_x = dt_x.to(self.device).float()
-            return x, x_voicing, pr_mat, pr_mat_voicing, dt_x
+            return batch['p_grids'].to(self.device).long(), \
+                   batch['p_grids_voicing'].to(self.device).long(), \
+                   batch['pr_mats'].to(self.device).float(), \
+                   batch['pr_mats_voicing'].to(self.device).float(), \
+                   batch['voicing_multi_hot'].to(self.device).float(), \
+                   batch['dt_x'].to(self.device).float()
