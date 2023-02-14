@@ -29,8 +29,8 @@ parallel = parallel if torch.cuda.is_available() and \
                        torch.cuda.device_count() > 1 else False
 # train_model
 chd_encoder = RnnEncoder(36, 1024, 256)
-rhy_encoder = PtvaeEncoder(device=device, z_size=256, max_pitch=39 - 8, min_pitch=0)
-# rhy_encoder = TextureEncoder(256, 1024, 256)
+# rhy_encoder = PtvaeEncoder(device=device, z_size=256, max_pitch=39 - 8, min_pitch=0)
+rhy_encoder = TextureEncoder(256, 1024, 256)
 # pt_encoder = PtvaeEncoder(device=device, z_size=152)
 chd_decoder = RnnDecoder(z_dim=256)
 pt_decoder = PtvaeDecoder(note_embedding=None,
