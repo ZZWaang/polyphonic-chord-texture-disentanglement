@@ -132,7 +132,8 @@ class TrainingInterface:
         epoch_loss_dic = self._init_loss_dic()
 
         for i, batch in enumerate(self.data_loaders.train_loader):
-            inputs = self._batch_to_inputs(batch)
+            # TODO: why the inputs' element number is 4
+            inputs = self._batch_to_inputs(batch)[:-1]
             self.opt_scheduler.optimizer_zero_grad()
             input_params = self.param_scheduler.step()
             outputs = self.model('train', *inputs, **input_params)
@@ -164,7 +165,7 @@ class TrainingInterface:
         epoch_loss_dic = self._init_loss_dic()
 
         for i, batch in enumerate(self.data_loaders.val_loader):
-            inputs = self._batch_to_inputs(batch)
+            inputs = self._batch_to_inputs(batch)[:-1]
             input_params = self.param_scheduler.step()
             with torch.no_grad():
                 outputs = self.model('train', *inputs, **input_params)
@@ -197,7 +198,7 @@ class TrainingInterface:
         self.train_step = start_train_step
         self.val_step = start_val_step
         best_valid_loss = float('inf')
-
+        print('Start Training')
         for i in range(self.n_epoch):
             start_time = time.time()
             train_loss = self.train()['loss']

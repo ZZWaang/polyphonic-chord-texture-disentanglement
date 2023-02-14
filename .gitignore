@@ -5,7 +5,6 @@ __pycache__/
 result*/
 log/
 params/
-data/
 models/
 stats_data/
 old-models/
@@ -132,3 +131,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+cache/
+data/
+.pt
+test.py
+.npy

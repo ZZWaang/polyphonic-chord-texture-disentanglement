@@ -2,11 +2,15 @@ from converter import ext_nmat_to_nmat, nmat_to_notes
 import pretty_midi as pm
 import numpy as np
 
+from polydis2_utils import extract_voicing_from_8d_nmat
+
+np.set_printoptions(threshold=np.inf)
+
 
 class PolyphonicMusic:
 
     def __init__(self, tracks, beat_table, chord_table, instrument_list=None,
-                 track_name_list=None, bpm=120.):
+                 track_name_list=None, bpm=120., prepare_voicing=False):
         self.tracks = tracks
         # self.beat_table = beat_table
         assert beat_table.shape[0] == chord_table.shape[0]
@@ -24,6 +28,7 @@ class PolyphonicMusic:
         else:
             self.track_name_list = track_name_list
         self.bpm = bpm
+        self.prepare_voicing = prepare_voicing
 
     def _select_track(self, track_ind=None, track_name=None):
         if track_ind is None and track_name is None:
@@ -39,10 +44,8 @@ class PolyphonicMusic:
         if db_pos is None or db_ts is None:
             db_pos, db_ts = self.beat_track.get_downbeats()
         bar_tracks = []
-        for s, e in zip(db_pos, np.append(db_pos[1: ],
-                                          db_pos[-1] + db_ts[-1])):
-            note_inds = \
-                np.where(np.logical_and(track[:, 0] >= s, track[:, 0] < e))[0]
+        for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + db_ts[-1])):
+            note_inds = np.where(np.logical_and(track[:, 0] >= s, track[:, 0] < e))[0]
             bar_track = track[note_inds]
             bar_tracks.append(bar_track)
         return bar_tracks
@@ -51,7 +54,7 @@ class PolyphonicMusic:
         if db_pos is None or db_ts is None:
             db_pos, db_ts = self.beat_track.get_downbeats()
         bar_chord = []
-        for s, e in zip(db_pos, np.append(db_pos[1: ],
+        for s, e in zip(db_pos, np.append(db_pos[1:],
                                           db_pos[-1] + db_ts[-1])):
             bar_chord.append(self.chord_table[s: e])
         return bar_chord
@@ -105,8 +108,12 @@ class PolyphonicMusic:
             tracks = broken_tracks[i]
             mel_track = translate_track(merge(tracks, mel_id), db_pos[i])
             acc_track = translate_track(merge(tracks, acc_id), db_pos[i])
+            voicing_track = extract_voicing_from_8d_nmat(acc_track)
             chord = broken_chords[i]
-            data_track.append([mel_track, acc_track, chord])
+            if self.prepare_voicing:
+                data_track.append([mel_track, acc_track, chord, voicing_track])
+            else:
+                data_track.append([mel_track, acc_track, chord])
             if mel_track is None and acc_track is None:
                 indicator[i] = 0
                 continue
@@ -269,3 +276,106 @@ class BeatTrack:
         ts_values = self.beat_table[ts_change_pos, 5]
         return ts_change_pos, ts_values
 
+
+class NikoChordProgression:
+
+    def __init__(self, pr, chroma, bpm=120.):
+        self.chord_table = self.niko_down_sample(chroma, 'c')
+        self.pr = self.niko_down_sample(pr, 'pr')
+        self.bpm = bpm
+        self.track = None
+        self.pr2tracks()
+
+    def niko_down_sample(self, data, data_type='pr'):
+        if data_type == 'pr':
+            sample_rate = 2 if len(data) < 128 else 4
+            new_data = []
+            for i in range(len(data)):
+                if i % sample_rate == 0:
+                    new_time = []
+                    for pitch in range(128):
+                        new_time.append(data[i][pitch] // sample_rate)
+                    new_data.append(new_time)
+            return np.array(new_data)
+        if data_type == 'c':
+            sample_rate = 2 if len(data) < 128 else 4
+            return data[::sample_rate]
+
+    def pr2tracks(self):
+        track = []
+        for current_time in range(len(self.pr)):
+            for pitch in range(len(self.pr[current_time])):
+                if self.pr[current_time][pitch] != 0:
+                    start = current_time
+                    end = current_time + self.pr[current_time][pitch]
+                    vel = 80
+                    track.append([start // 4, start % 4, 4, end // 4, end % 4, 4, pitch, vel])
+        self.track = np.array(track)
+
+    def _break_track_to_bars(self, db_pos):
+        # return a list of bars
+        # track = self._select_track(track_ind, track_name)
+        bar_tracks = []
+        for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
+            note_inds = np.where(np.logical_and(self.track[:, 0] >= s, self.track[:, 0] < e))[0]
+            bar_track = self.track[note_inds]
+            bar_tracks.append(bar_track)
+        return bar_tracks
+
+    def _break_chord_to_bars(self, db_pos):
+        bar_chord = []
+        self.chord_table_beat = self.chord_table[::4, :]
+        if len(db_pos) == 1:
+            bar_chord.append(self.chord_table_beat[0: 4])
+        else:
+            for s, e in zip(db_pos, np.append(db_pos[1:], db_pos[-1] + 4)):
+                bar_chord.append(self.chord_table_beat[s: e])
+        return bar_chord
+
+    def prepare_data(self, num_bar=8, ts=4):
+        # Indicator == 1 if
+        # 1) The current bar has ts = 4
+        # 2) The current bar is not blank
+        # 3) The consecutive 3 bars have ts = 4.
+        def translate_track(track, translation):
+            if track is None:
+                return track
+            track[:, 0] -= translation
+            track[:, 3] -= translation
+            return track
+
+        def get_downbeats(track):
+            max_beat = max(track, key=lambda x: x[3])[3]
+            downbeats = list(range(0, max_beat, 4))
+            return downbeats
+
+        db_pos = get_downbeats(self.track)
+        broken_tracks = self._break_track_to_bars(db_pos)
+        broken_chords = self._break_chord_to_bars(db_pos)
+        assert len(broken_tracks) == len(db_pos)
+        assert len(broken_chords) == len(db_pos)
+        indicator = np.zeros(len(db_pos))
+        # Do the following check because there are cases when ts = 4, but
+        # the beat count is 4. In this case, there is only 2 beat in this
+        # bar. We should not include those bars.
+        for i, chord in enumerate(broken_chords):
+            if chord.shape[0] != ts:
+                indicator[i] = -1
+        data_track = []
+        for i in range(len(db_pos)):
+            track = broken_tracks[i]
+            mel_track = None
+            acc_track = translate_track(track, db_pos[i])
+            chord = broken_chords[i]
+            data_track.append([mel_track, acc_track, chord])
+            if mel_track is None and acc_track is None:
+                indicator[i] = 0
+                continue
+            if i > len(db_pos) - num_bar:
+                indicator[i] = 0
+                continue
+            if (indicator[i: i + num_bar] == -1).any():
+                indicator[i] = 0
+                continue
+            indicator[i] = 1
+        return data_track, indicator, db_pos

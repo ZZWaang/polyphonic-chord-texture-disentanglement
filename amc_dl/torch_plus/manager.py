@@ -63,7 +63,7 @@ class DataLoaders:
         self.device = device
 
     @staticmethod
-    def get_loaders(seed, bs_train, bs_val,
+    def get_loaders(seed, dataset_name, bs_train, bs_val,
                     portion=8, shift_low=-6, shift_high=5, num_bar=2,
                     contain_chord=True):
         raise NotImplementedError
