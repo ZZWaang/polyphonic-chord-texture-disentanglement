@@ -6,7 +6,7 @@ import pretty_midi as pyd
 from models.model import DisentangleVAE, DisentangleVoicingTextureVAE
 from models.ptvae import PtvaeDecoder
 from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
-    chord_stretch, pr_stretch, generate_pop909_test_sample, extract_voicing_from_pr, pr2midi
+    chord_stretch, pr_stretch, generate_pop909_test_sample, extract_voicing_from_pr, pr2midi, extract_voicing
 
 np.set_printoptions(threshold=10000)
 
@@ -25,22 +25,42 @@ def inference_stage1(chord_table, acc_ensemble, checkpoint='data/model_master_fi
     return midi_re_gen
 
 
+def compute_voicing_multihot(voicing):
+    result = []
+    for item in voicing:
+        i = 0
+        single_result = []
+        while i * 16 < len(item):
+            hot = []
+            for pitch in range(128):
+                if item[i * 16][pitch] != 0:
+                    hot.append(pitch)
+            hot = [1 if j in hot else 0 for j in range(128)]
+            for j in range(16):
+                single_result.append(hot)
+            i += 1
+        result.append(single_result)
+    return np.array(result)
+
+
 def inference_stage2(voicing, acc, checkpoint, with_voicing_recon=False):
     acc = melody_split(acc, window_size=32, hop_size=32, vector_size=128)
     voicing = melody_split(voicing, window_size=32, hop_size=32, vector_size=128)
+    vm = compute_voicing_multihot(voicing)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = DisentangleVoicingTextureVAE.init_model(device).to(device)
     checkpoint = torch.load(checkpoint, map_location=device)
     model.load_state_dict(checkpoint)
     acc = torch.from_numpy(acc).float().to(device)
     voicing = torch.from_numpy(voicing).float().to(device)
+    vm = torch.from_numpy(vm).float().to(device)
     if with_voicing_recon:
-        est_x, est_x_voicing = model.inference_with_chord_decode(acc, voicing, sample=False)
+        est_x, est_x_voicing = model.inference_with_chord_decode(acc, voicing, vm, sample=False)
         midi_re_gen = accompaniment_generation(est_x, 120)
         midi_re_gen_voicing = accompaniment_generation(est_x_voicing, 120)
         return midi_re_gen, midi_re_gen_voicing
     else:
-        est_x = model.inference(acc, voicing, sample=False)
+        est_x = model.inference(acc, voicing, vm, sample=False)
         midi_re_gen = accompaniment_generation(est_x, 120)
         return midi_re_gen
 
@@ -105,7 +125,8 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
         texture_midi = pretty_midi.PrettyMIDI(texture_provider)
         voicing = midi2pr(voicing_midi)
         texture = midi2pr(texture_midi)
-        recon, recon_recon_voicing = inference_stage2(voicing, texture, checkpoint=stage2_checkpoint, with_voicing_recon=with_voicing_recon)
+        recon, recon_recon_voicing = inference_stage2(voicing, texture, checkpoint=stage2_checkpoint,
+                                                      with_voicing_recon=with_voicing_recon)
         return recon, None, recon_recon_voicing
     else:
         chord_midi = pretty_midi.PrettyMIDI(chord_provider)
@@ -127,30 +148,30 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
 
 
 if __name__ == '__main__':
-    PATH = 'experiments/20221024/test1/'
-    CHORD_PATH = PATH + 'voicing.mid'
-    VOICING_PATH = PATH + 'voicing.mid'
-    TEXTURE_PATH = PATH + 'texture.mid'
-    STAGE1_CP = 'data/train_stage1_20220818.pt'
-    STAGE2_CP = 'data/train_stage2_20221009.pt'
-    VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
-    RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
-    RECON_WRITE_PATH = PATH + 'recon.mid'
-    recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
-        chord_provider=CHORD_PATH,
-        voicing_provider=VOICING_PATH,
-        texture_provider=TEXTURE_PATH,
-        stage1_checkpoint=STAGE1_CP,
-        stage2_checkpoint=STAGE2_CP,
-        with_voicing_recon=True)
-    recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
-    recon.write(RECON_WRITE_PATH) if recon is not None else None
-    recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
+    # PATH = 'experiments/20221121/test10/'
+    # CHORD_PATH = PATH + 'voicing.mid'
+    # VOICING_PATH = PATH + 'voicing.mid'
+    # TEXTURE_PATH = PATH + 'texture.mid'
+    # STAGE1_CP = 'data/train_stage1_20220818.pt'
+    # STAGE2_CP = 'data/train_stage2_20221114.pt'
+    # VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
+    # RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
+    # RECON_WRITE_PATH = PATH + 'recon.mid'
+    # recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
+    #     chord_provider=CHORD_PATH,
+    #     voicing_provider=VOICING_PATH,
+    #     texture_provider=TEXTURE_PATH,
+    #     stage1_checkpoint=STAGE1_CP,
+    #     stage2_checkpoint=STAGE2_CP,
+    #     with_voicing_recon=True)
+    # recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
+    # recon.write(RECON_WRITE_PATH) if recon is not None else None
+    # recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
 
     # midi = generate_pop909_test_sample()
     # midi.write('pop909.mid')
     # pr2midi(extract_voicing_from_pr(midi2pr(midi), chord_length=16)).write('pop909v.mid')
 
-    # path = 'experiments/test5'
-    # texture_midi = pretty_midi.PrettyMIDI(path + '/texture.mid')
-    # pr2midi(extract_voicing_from_pr(midi2pr(texture_midi), chord_length=16)).write('test_v.mid')
+    path = 'experiments/20221121/test10'
+    texture_midi = pretty_midi.PrettyMIDI(path + '/texture.mid')
+    extract_voicing(texture_midi).write(path + '/voicing_ext.mid')

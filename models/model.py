@@ -309,14 +309,14 @@ class DisentangleVoicingTextureVAE(PytorchModel):
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
         return est_x
 
-    def inference_with_chord_decode(self, pr_mat, c, sample):
+    def inference_with_chord_decode(self, pr_mat, c, vm, sample):
         self.eval()
         with torch.no_grad():
             dist_chd = self.voicing_encoder(c)
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
-            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None, vm,
                                                 None, 0., 0.)
             pitch_outs_c, dur_outs_c = self.voicing_decoder(z_chd, True, None,
                                                             None, 0., 0.)

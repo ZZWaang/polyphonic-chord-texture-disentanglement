@@ -635,10 +635,10 @@ class PtvaeAttentionDecoder(nn.Module):
                    dec_time_hid_size,
                    num_layers=1, batch_first=True,
                    bidirectional=False)
-        self.note_summary_attention = NoteSummaryAttention(dec_time_hid_size, voicing_size,
-                                                           attention_emb, dec_time_hid_size)
-        # self.note_summary_attention = NoteSummaryAttention(voicing_size, dec_time_hid_size,
+        # self.note_summary_attention = NoteSummaryAttention(dec_time_hid_size, voicing_size,
         #                                                    attention_emb, dec_time_hid_size)
+        self.note_summary_attention = NoteSummaryAttention(voicing_size, dec_time_hid_size,
+                                                           attention_emb, dec_time_hid_size)
         self.dec_time_to_notes_hid = nn.Linear(dec_time_hid_size,
                                                dec_notes_hid_size)
         self.dec_notes_gru = nn.GRU(dec_time_hid_size + note_emb_size,
@@ -824,11 +824,11 @@ class PtvaeAttentionDecoder(nn.Module):
         for t in range(self.num_step):
             notes_summary, z_hid = \
                 self.dec_time_gru(torch.cat([token, z_in], dim=-1), z_hid)
-            notes_summary = self.note_summary_attention(torch.squeeze(notes_summary, dim=1), voicing[:, t, :])
-            # notes_summary += self.note_summary_attention(notes_summary, voicing[:, t, :])
+            # notes_summary = self.note_summary_attention(torch.squeeze(notes_summary, dim=1), voicing[:, t, :])
+            # notes_summary = notes_summary + self.note_summary_attention(torch.squeeze(notes_summary, dim=1), voicing[:, t, :])
 
             # notes_summary = self.note_summary_attention(voicing[:, t, :], torch.squeeze(notes_summary, dim=1))
-            # notes_summary += self.note_summary_attention(voicing[:, t, :], torch.squeeze(notes_summary, dim=1))
+            notes_summary = notes_summary + self.note_summary_attention(voicing[:, t, :], torch.squeeze(notes_summary, dim=1))
 
             if inference:
                 pitch_out, dur_out, predicted_notes, predicted_lengths = \
