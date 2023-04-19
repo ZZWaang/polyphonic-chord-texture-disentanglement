@@ -364,6 +364,7 @@ def midi2pr(track, down_sample=1):
     else:
         raise Exception
     notes, _, _ = midi_to_source_base(midi)
+    print(notes)
     max_end = max(notes, key=lambda x: x[1])[1] // down_sample
     pr = np.zeros((max_end, 128))
     for note in notes:

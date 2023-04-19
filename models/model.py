@@ -316,7 +316,7 @@ class DisentangleVoicingTextureVAE(PytorchModel):
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
-            pitch_outs, dur_outs = self.decoder(dec_z, True, None, vm,
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None, 
                                                 None, 0., 0.)
             pitch_outs_c, dur_outs_c = self.voicing_decoder(z_chd, True, None,
                                                             None, 0., 0.)
@@ -356,12 +356,12 @@ class DisentangleVoicingTextureVAE(PytorchModel):
         voicing_decoder = PtvaeDecoder(note_embedding=None,
                                        dec_dur_hid_size=64,
                                        z_size=voicing_size)
-        # pt_decoder = PtvaeDecoder(note_embedding=None,
-        #                           dec_dur_hid_size=64, z_size=512)
-        pt_decoder = PtvaeAttentionDecoder(note_embedding=None,
-                                           dec_dur_hid_size=64,
-                                           z_size=voicing_size + txt_size,
-                                           attention_emb=32)
+        pt_decoder = PtvaeDecoder(note_embedding=None,
+                                  dec_dur_hid_size=64, z_size=512)
+        # pt_decoder = PtvaeAttentionDecoder(note_embedding=None,
+        #                                    dec_dur_hid_size=64,
+        #                                    z_size=voicing_size + txt_size,
+        #                                    attention_emb=32)
 
         model = DisentangleVoicingTextureVAE(name, device, voicing_encoder,
                                              rhy_encoder, pt_decoder, voicing_decoder)

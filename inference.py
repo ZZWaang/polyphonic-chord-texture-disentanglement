@@ -7,7 +7,7 @@ from models.model import DisentangleVAE, DisentangleVoicingTextureVAE
 from models.ptvae import PtvaeDecoder
 from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
     chord_stretch, pr_stretch, generate_pop909_test_sample, extract_voicing_from_pr, pr2midi, extract_voicing
-
+from utils.utils import extract_voicing
 np.set_printoptions(threshold=10000)
 
 
@@ -125,6 +125,8 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
         texture_midi = pretty_midi.PrettyMIDI(texture_provider)
         voicing = midi2pr(voicing_midi)
         texture = midi2pr(texture_midi)
+        print(texture.shape)
+        print(texture)
         recon, recon_recon_voicing = inference_stage2(voicing, texture, checkpoint=stage2_checkpoint,
                                                       with_voicing_recon=with_voicing_recon)
         return recon, None, recon_recon_voicing
@@ -134,10 +136,14 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
         texture_midi = pretty_midi.PrettyMIDI(texture_provider)
         chord = chord_data2matrix(chord_midi.instruments[0], chord_midi.get_downbeats(), 'quarter')
         chord = chord[::16, :]
+        print(chord.shape)
         voicing = midi2pr(voicing_midi, down_sample=4)
+        print(voicing.shape)
         recon_chord_voicing_midi = inference_stage1(chord, voicing, checkpoint=stage1_checkpoint)
         recon_voicing = midi2pr(recon_chord_voicing_midi)
         texture = midi2pr(texture_midi)
+        print(texture.shape)
+        print(texture)
         if with_voicing_recon:
             recon, recon_recon_voicing = inference_stage2(recon_voicing, texture, checkpoint=stage2_checkpoint,
                                                           with_voicing_recon=with_voicing_recon)
@@ -148,30 +154,32 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
 
 
 if __name__ == '__main__':
-    # PATH = 'experiments/20221121/test10/'
-    # CHORD_PATH = PATH + 'voicing.mid'
-    # VOICING_PATH = PATH + 'voicing.mid'
-    # TEXTURE_PATH = PATH + 'texture.mid'
-    # STAGE1_CP = 'data/train_stage1_20220818.pt'
-    # STAGE2_CP = 'data/train_stage2_20221114.pt'
-    # VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
-    # RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
-    # RECON_WRITE_PATH = PATH + 'recon.mid'
-    # recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
-    #     chord_provider=CHORD_PATH,
-    #     voicing_provider=VOICING_PATH,
-    #     texture_provider=TEXTURE_PATH,
-    #     stage1_checkpoint=STAGE1_CP,
-    #     stage2_checkpoint=STAGE2_CP,
-    #     with_voicing_recon=True)
-    # recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
-    # recon.write(RECON_WRITE_PATH) if recon is not None else None
-    # recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
-
+    for i in range(2, 3):
+        PATH = f'experiments/20230321/{i}/'
+        CHORD_PATH = PATH + 'v.mid'
+        VOICING_PATH = PATH + 'v.mid'
+        TEXTURE_PATH = PATH + 't.mid'
+        STAGE1_CP = 'data/train_stage1_20220818.pt'
+        STAGE2_CP = 'data/train_stage2_20221009.pt'
+        VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
+        RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
+        RECON_WRITE_PATH = PATH + 'recon.mid'
+        recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
+            chord_provider=CHORD_PATH,
+            voicing_provider=VOICING_PATH,
+            texture_provider=TEXTURE_PATH,
+            stage1_checkpoint=STAGE1_CP,
+            stage2_checkpoint=STAGE2_CP,
+            with_voicing_recon=True)
+        recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
+        recon.write(RECON_WRITE_PATH) if recon is not None else None
+        recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
+    print("task finished")
     # midi = generate_pop909_test_sample()
     # midi.write('pop909.mid')
     # pr2midi(extract_voicing_from_pr(midi2pr(midi), chord_length=16)).write('pop909v.mid')
 
-    path = 'experiments/20221121/test10'
-    texture_midi = pretty_midi.PrettyMIDI(path + '/texture.mid')
-    extract_voicing(texture_midi).write(path + '/voicing_ext.mid')
+    # path = 'experiments/20230321/2'
+    # texture_midi = pretty_midi.PrettyMIDI(path + '/t.mid')
+    # extract_voicing(texture_midi).write(path + '/v.mid')
+
