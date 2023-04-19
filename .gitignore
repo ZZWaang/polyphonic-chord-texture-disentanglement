@@ -133,6 +133,7 @@ dmypy.json
 
 cache/
 data/
+experiments/
 .pt
 test.py
 .npy
