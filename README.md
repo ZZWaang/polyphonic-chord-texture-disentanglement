@@ -4,6 +4,6 @@
 
 Still in development. 
 
-Before running, download the data files (model weights) and put them in the `data` folder.
+Before running, download the [data files](https://drive.google.com/file/d/10amJObaAxOD77zS2t-rzRm2D7AxChcKZ/view?usp=sharing) (model weights) and put them in the `data` folder.
 
 Train and inference in `train.py` and `inference.py`
