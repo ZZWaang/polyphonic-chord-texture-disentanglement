@@ -1,4 +1,4 @@
-# Autoregressive Generation Based on Hierarchical Chord-voicing-texture Disentanglement
+# Polyphonic Music Autoregressive Generation Based on Hierarchical Chord-voicing-texture Disentanglement
 
 
 
