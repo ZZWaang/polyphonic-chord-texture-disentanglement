@@ -150,6 +150,7 @@ class DisentangleVAE(PytorchModel):
             else:
                 x = torch.from_numpy(x)
 
+
         def loss_for_inference(x, c, beta=0.1, weights=(1, 0.5)):
             outputs = pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, \
                       recon_chroma, recon_bass
@@ -157,6 +158,29 @@ class DisentangleVAE(PytorchModel):
             return loss
 
         return est_x, loss_for_inference(x, c)
+
+    def inference_save_z(self, pr_mat, c, sample, z_path):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            torch.save(dec_z, z_path)
+
+    def inference_only_decode(self, z, with_chord=False):
+        self.eval()
+        with torch.no_grad():
+            pitch_outs, dur_outs = self.decoder(z, True, None,
+                                                None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+            if with_chord:
+                z_chord = z[:, :256]
+                print(z_chord.shape)
+                recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chord, True,
+                                                                        0., None)
+                return est_x, recon_root, recon_chroma, recon_bass
+            return est_x
 
     def swap(self, pr_mat1, pr_mat2, c1, c2, fix_rhy, fix_chd):
         pr_mat = pr_mat1 if fix_rhy else pr_mat2
@@ -297,26 +321,30 @@ class DisentangleVoicingTextureVAE(PytorchModel):
         loss = self.loss_function(x, c, *outputs, beta, weights)
         return loss
 
-    def inference(self, pr_mat, c, sample):
+    def inference(self, pr_mat, c, sample, save_z=None):
         self.eval()
         with torch.no_grad():
             dist_chd = self.voicing_encoder(c)
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            if save_z:
+                torch.save(dec_z, 'zs/s2/{}.pt'.format(save_z))
             pitch_outs, dur_outs = self.decoder(dec_z, True, None,
                                                 None, 0., 0.)
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
         return est_x
 
-    def inference_with_chord_decode(self, pr_mat, c, vm, sample):
+    def inference_with_chord_decode(self, pr_mat, c, vm, sample, save_z=None):
         self.eval()
         with torch.no_grad():
             dist_chd = self.voicing_encoder(c)
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
-            pitch_outs, dur_outs = self.decoder(dec_z, True, None, 
+            if save_z:
+                torch.save(dec_z, 'zs/s2/{}.pt'.format(save_z))
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
                                                 None, 0., 0.)
             pitch_outs_c, dur_outs_c = self.voicing_decoder(z_chd, True, None,
                                                             None, 0., 0.)

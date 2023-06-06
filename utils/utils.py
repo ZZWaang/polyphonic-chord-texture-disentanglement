@@ -1,3 +1,5 @@
+import math
+
 import pretty_midi as pm
 import copy
 import pretty_midi as pyd
@@ -40,7 +42,7 @@ def nmat_to_notes(nmat, start, bpm):
 def ext_nmat_to_pr(ext_nmat, num_step=32):
     # [start measure, no, deno, .., .., .., pitch, vel]
     # This is not RIGHT in general. Only works for 2-bar 4/4 music for now.
-    pr = np.zeros((32, 128))
+    pr = np.zeros((num_step, 128))
     if ext_nmat is not None:
         for (sb, sq, sde, eb, eq, ede, p, v) in ext_nmat:
             s_ind = int(sb * sde + sq)
@@ -54,7 +56,7 @@ def ext_nmat_to_pr(ext_nmat, num_step=32):
 def ext_nmat_to_mel_pr(ext_nmat, num_step=32):
     # [start measure, no, deno, .., .., .., pitch, vel]
     # This is not RIGHT in general. Only works for 2-bar 4/4 music for now.
-    pr = np.zeros((32, 130))
+    pr = np.zeros((num_step, 130))
     pr[:, 129] = 1
     if ext_nmat is not None:
         for (sb, sq, sde, eb, eq, ede, p, v) in ext_nmat:
@@ -339,14 +341,37 @@ def chord_data2matrix(chord_track, downbeats, resolution='beat', chord_expand=Tr
     return np.array(chord_table)
 
 
+def onset_sus_pr2midi(pr):
+    all_notes = []
+    i = 0
+    for time in range(len(pr)):
+        for pitch in range(128):
+            if pr[time][pitch] == 2:
+                sus = 1
+                if time+sus < len(pr):
+                    while pr[time+sus][pitch] == 1:
+                        sus += 1
+                        if time+sus >= len(pr):
+                            break
+                if i >= 0:
+                    all_notes.append(
+                        pyd.Note(start=i * 0.125, end=(i + sus) * 0.125, pitch=pitch, velocity=60))
+        i += 1
+    ins = pyd.Instrument(0)
+    ins.notes = all_notes
+    midi = pyd.PrettyMIDI()
+    midi.instruments.append(ins)
+    return midi
+
+
 def pr2midi(pr):
     all_notes = []
     i = 0
-    for time in pr:
+    for time in range(len(pr)):
         for pitch in range(128):
-            if time[pitch] != 0:
+            if pr[time][pitch] != 0:
                 all_notes.append(
-                    pyd.Note(start=i * 0.125, end=(i + time[pitch]) * 0.125, pitch=pitch, velocity=60))
+                    pyd.Note(start=i * 0.125, end=(i + pr[time][pitch]) * 0.125, pitch=pitch, velocity=60))
         i += 1
     ins = pyd.Instrument(0)
     ins.notes = all_notes
@@ -364,12 +389,11 @@ def midi2pr(track, down_sample=1):
     else:
         raise Exception
     notes, _, _ = midi_to_source_base(midi)
-    print(notes)
-    max_end = max(notes, key=lambda x: x[1])[1] // down_sample
+    max_end = int(max(notes, key=lambda x: x[1])[1]) // down_sample
     pr = np.zeros((max_end, 128))
     for note in notes:
-        duration = (note[1] - note[0]) // down_sample
-        pr[(note[0]) // down_sample, note[2]] = duration
+        duration = math.ceil((note[1]-note[0])/down_sample)
+        pr[int(note[0]) // down_sample, note[2]] = duration
     return pr
 
 
@@ -451,7 +475,6 @@ def pr_to_8d_nmat(pr):
 
 
 def nmat_to_pr(nmat):
-    print(nmat)
     max_note = max(nmat, key=lambda i: i[3] * i[5] + i[4])
     max_end = max_note[3] * max_note[5] + max_note[4]
     pr = np.zeros((int(max_end), 128))
@@ -468,8 +491,8 @@ def extract_voicing_from_8d_nmat_2bars(nmat):
         note_end_unit_count = min_time_unit_count + int(length_unit * weight)
         return note_end_unit_count // min_t[2], note_end_unit_count % min_t[2], min_t[2]
 
-    if nmat is None:
-        return None
+    if not nmat:
+        return []
 
     # calc max end time and min start time
     min_t, max_t = [10000, 0, 4], [0, 0, 4]
@@ -513,14 +536,16 @@ def extract_voicing_from_8d_nmat_2bars(nmat):
 
 
 def extract_voicing_from_8d_nmat(nmat):
+    if nmat is None:
+        return nmat
     final_nmat = np.zeros((0, 8), dtype=int)
     for i in range(0, int(max(nmat, key=lambda x: x[3])[3]), 4):
         segment_nmat = []
         for note in nmat:
             if i <= note[0] < i + 4:
                 segment_nmat.append(note)
-        print(segment_nmat)
-        final_nmat = np.concatenate((final_nmat, extract_voicing_from_8d_nmat_2bars(segment_nmat)))
+        if segment_nmat:
+            final_nmat = np.concatenate((final_nmat, extract_voicing_from_8d_nmat_2bars(segment_nmat)))
     return final_nmat
 
 

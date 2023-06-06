@@ -154,9 +154,9 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
 
 
 if __name__ == '__main__':
-    for i in range(2, 3):
+    for i in range(1, 3):
         PATH = f'experiments/20230321/{i}/'
-        CHORD_PATH = PATH + 'v.mid'
+        CHORD_PATH = PATH + 'c.mid'
         VOICING_PATH = PATH + 'v.mid'
         TEXTURE_PATH = PATH + 't.mid'
         STAGE1_CP = 'data/train_stage1_20220818.pt'

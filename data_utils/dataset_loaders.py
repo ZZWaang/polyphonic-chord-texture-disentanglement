@@ -1,4 +1,5 @@
-from data_utils.dataset import prepare_dataset_niko, prepare_dataset, prepare_dataset_pop909_voicing
+from data_utils.dataset import prepare_dataset_niko, prepare_dataset, prepare_dataset_pop909_voicing, \
+    prepare_dataset_pop909_stage_a
 from amc_dl.torch_plus import DataLoaders
 from amc_dl.torch_plus import TrainingInterface
 
@@ -18,6 +19,9 @@ class MusicDataLoaders(DataLoaders):
         elif dataset_name == 'pop909':
             train, val = prepare_dataset(seed, bs_train, bs_val, portion, shift_low,
                                          shift_high, num_bar, random_train, random_val)
+        elif dataset_name == 'pop909_stage_a':
+            train, val = prepare_dataset_pop909_stage_a(seed, bs_train, bs_val, portion, shift_low,
+                                              shift_high, num_bar, random_train, random_val)
         else:
             raise Exception
         return MusicDataLoaders(train, val, bs_train, bs_val)
@@ -27,7 +31,7 @@ class TrainingVAE(TrainingInterface):
 
     def _batch_to_inputs(self, batch):
 
-        if batch['pr_mats_voicing'] is None:
+        if 'pr_mats_voicing' not in batch:
             return batch['p_grids'].to(self.device).long(), \
                    batch['chord'].to(self.device).float(), \
                    batch['pr_mats'].to(self.device).float(), \

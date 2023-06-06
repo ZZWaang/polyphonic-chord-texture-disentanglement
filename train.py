@@ -46,7 +46,7 @@ if config.training_stage == 1:
                                    dec_dur_hid_size=64, z_size=512)
     model = DisentangleVAE(config.name, config.device, chd_encoder,
                            voicing_encoder, voicing_decoder, chd_decoder)
-    data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='niko',
+    data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_stage_a',
                                                 bs_train=config.batch_size, bs_val=config.batch_size,
                                                 portion=8, shift_low=-6, shift_high=5,
                                                 num_bar=2, contain_chord=True)
@@ -66,7 +66,7 @@ else:
     data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_voicing',
                                                 bs_train=config.batch_size, bs_val=config.batch_size,
                                                 portion=8, shift_low=-6, shift_high=5,
-                                                num_bar=2, contain_chord=True)
+                                                num_bar=8, contain_chord=True)
     writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'kl_loss', 'kl_chd',
                     'kl_rhy', 'recon_loss_c', 'pl_c', 'dl_c']
 

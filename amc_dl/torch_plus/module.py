@@ -147,6 +147,7 @@ class TrainingInterface:
             self.summary_writers.write_task('train', batch_loss_dic,
                                             self.train_step)
             self.train_step += 1
+            print(self.train_step)
         return epoch_loss_dic
 
     def _sum_parallel_loss(self, loss):

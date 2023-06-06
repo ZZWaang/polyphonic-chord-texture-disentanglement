@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 import glob
 import os
@@ -8,7 +9,7 @@ from data_utils.score import PolyphonicMusic, NikoChordProgression
 from torch.utils.data import DataLoader
 from utils.utils import ext_nmat_to_pr, ext_nmat_to_mel_pr, \
     augment_pr, augment_mel_pr, pr_to_onehot_pr, piano_roll_to_target, \
-    target_to_3dtarget, expand_chord
+    target_to_3dtarget, expand_chord, onset_sus_pr2midi
 
 DATA_PATH = os.path.join('../data', 'POP09-PIANOROLL-4-bin-quantization')
 INDEX_FILE_PATH = os.path.join('../data', 'index.xlsx')
@@ -20,8 +21,10 @@ class ArrangementDataset(Dataset):
     def __init__(self, data, indicator, shift_low, shift_high, num_bar=8,
                  ts=4, contain_chord=False, contain_voicing=False):
         super(ArrangementDataset, self).__init__()
-        self.data = data
-        self.indicator = indicator
+        self.separated_data = data
+        self.data = np.concatenate(data)
+        self.separated_indicator = indicator
+        self.indicator = np.concatenate(indicator)
         self.shift_low = shift_low
         self.shift_high = shift_high
         self.num_sample = int(self.indicator.sum())
@@ -49,21 +52,33 @@ class ArrangementDataset(Dataset):
         return track
 
     def _combine_segments(self, segment):
-        first, second = segment
-        if first is None and second is None:
-            nmat = None
-        elif first is None:
-            nmat = ArrangementDataset._translate(second, -self.ts)
-        elif second is None:
-            nmat = first
-        else:
-            second = ArrangementDataset._translate(second, -self.ts)
-            nmat = np.concatenate([first, second], axis=0)
-
+        translated_segments = []
+        counter = 0
+        for i in segment:
+            if i is None:
+                continue
+            translated_segments.append(ArrangementDataset._translate(i, -counter * self.ts))
+            counter += 1
+        if not translated_segments:
+            return None
+        if len(translated_segments) == 1:
+            return translated_segments[0]
+        # first, second = segment
+        # if first is None and second is None:
+        #     nmat = None
+        # elif first is None:
+        #     nmat = ArrangementDataset._translate(second, -self.ts)
+        # elif second is None:
+        #     nmat = first
+        # else:
+        #     second = ArrangementDataset._translate(second, -self.ts)
+        #     nmat = np.concatenate([first, second], axis=0)
+        nmat = np.concatenate(translated_segments, axis=0)
         return nmat
 
     def __len__(self):
         # consider data augmentation here
+        # return len(self.separated_data)
         return self.num_sample * (self.shift_high - self.shift_low + 1)
 
     def __getitem__(self, id):
@@ -73,6 +88,30 @@ class ArrangementDataset(Dataset):
         no = id // (self.shift_high - self.shift_low + 1)
         shift = id % (self.shift_high - self.shift_low + 1) + self.shift_low
 
+        ##### For Temporary Use: save music segments #####
+
+        # song = self.separated_data[id]
+        # song_indicator = self.separated_indicator[id]
+        # data = []
+        #
+        # for j in range(len(song)):
+        #     if not song_indicator[j]:
+        #         continue
+        #     else:
+        #         data.append(song[j])
+        #         if len(data) == self.num_bar:
+        #             acc = [x[1] for x in data]
+        #             acc_segments = [
+        #                 ext_nmat_to_pr(self._combine_segments(acc[i: i + self.num_bar]), num_step=16 * self.num_bar)
+        #                 for i in range(0, self.num_bar, self.num_bar)]
+        #             # do augmentation
+        #             acc_segments = np.array([augment_pr(pr, shift) for pr in acc_segments])
+        #             onset_sus_pr2midi(acc_segments[0]).write(f'z/{id}-{j}.mid')
+        #             data = []
+        # return True
+
+        ############################
+
         ind = self.valid_inds[no]
         data = self.data[ind: ind + self.num_bar]
         # data is a list of length num_bar
@@ -80,17 +119,15 @@ class ArrangementDataset(Dataset):
 
         mel = [x[0] for x in data]
         mel_segments = \
-            [ext_nmat_to_mel_pr(self._combine_segments(mel[i: i + 2]))
-             for i in range(0, self.num_bar, 2)]
-
+            [ext_nmat_to_mel_pr(self._combine_segments(mel[i: i + self.num_bar]), num_step=16 * self.num_bar)
+             for i in range(0, self.num_bar, self.num_bar)]
         # consider when there are None type segments.
         # translate, add together and change format.
         # break into four segments
 
         acc = [x[1] for x in data]
-        acc_segments = [ext_nmat_to_pr(self._combine_segments(acc[i: i + 2]))
-                        for i in range(0, self.num_bar, 2)]
-
+        acc_segments = [ext_nmat_to_pr(self._combine_segments(acc[i: i + self.num_bar]), num_step=16 * self.num_bar)
+                        for i in range(0, self.num_bar, self.num_bar)]
         # do augmentation
         mel_segments = np.array([augment_mel_pr(pr, shift) for pr in mel_segments])
         acc_segments = np.array([augment_pr(pr, shift) for pr in acc_segments])
@@ -110,7 +147,6 @@ class ArrangementDataset(Dataset):
         prs = prs[0]
         pr_mats = pr_mats[0]
         p_grids = p_grids[0]
-
         pr_mats_voicing = None
         p_grids_voicing = None
         voicing_multi_hot = None
@@ -149,10 +185,13 @@ class ArrangementDataset(Dataset):
                       'pr_mats': pr_mats,
                       'p_grids': p_grids,
                       'chord': chord,
-                      'dt_x': np.array([]),
-                      'pr_mats_voicing': pr_mats_voicing,
-                      'p_grids_voicing': p_grids_voicing,
-                      'voicing_multi_hot': voicing_multi_hot}
+                      'dt_x': np.array([])}
+
+        if pr_mats_voicing is not None:
+            batch_data['pr_mats_voicing'] = pr_mats_voicing
+            batch_data['p_grids_voicing'] = p_grids_voicing
+            batch_data['voicing_multi_hot'] = voicing_multi_hot
+
         self.cache[id] = batch_data
         return batch_data
 
@@ -314,9 +353,8 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, prepare
         music = init_music(fns[ind], prepare_voicing=prepare_voicing) if not niko else NikoChordProgression(pr[ind],
                                                                                                             c[ind])
         data_track, indct, db_pos = music.prepare_data(num_bar=num_bar)
-        data += data_track
+        data.append(data_track)
         indicator.append(indct)
-    indicator = np.concatenate(indicator)
     dataset = ArrangementDataset(data, indicator, shift_low, shift_high,
                                  num_bar=num_bar, contain_chord=True, contain_voicing=prepare_voicing)
     save_cache()
@@ -351,6 +389,8 @@ def prepare_dataset_pop909_voicing(seed, bs_train, bs_val, portion=8, shift_low=
     print('Constructing Training Set')
     train_set = wrap_dataset(fns, train_ids, shift_low, shift_high, num_bar=num_bar, prepare_voicing=True,
                              cache_name='pop909_voicing_train')
+    for i in range(len(train_set)):
+        print(train_set[i])
     print('Constructing Validation Set')
     val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar, prepare_voicing=True, cache_name='pop909_voicing_val')
     print(f'Done with {len(train_set)} training samples, {len(val_set)} validation samples')
@@ -364,8 +404,27 @@ def prepare_dataset_niko(seed, bs_train, bs_val,
     """
     Return the dataloaders of the niko dataset
     """
+    return prepare_niko_like_dataset(seed, bs_train, bs_val,
+                                     portion=portion, shift_low=shift_low, shift_high=shift_high, num_bar=num_bar,
+                                     random_train=random_train,
+                                     random_val=random_val)
+
+
+def prepare_dataset_pop909_stage_a(seed, bs_train, bs_val,
+                                   portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True,
+                                   random_val=False):
+    return prepare_niko_like_dataset(seed, bs_train, bs_val,
+                                     portion=portion, shift_low=shift_low, shift_high=shift_high, num_bar=num_bar,
+                                     random_train=random_train,
+                                     random_val=random_val,
+                                     name='pop909_stage_a.npz')
+
+
+def prepare_niko_like_dataset(seed, bs_train, bs_val,
+                              portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False,
+                              name='poly-dis-niko.npz'):
     print('Loading Training Data...')
-    data = np.load('../data/poly-dis-niko.npz', allow_pickle=True)
+    data = np.load(f'data/{name}', allow_pickle=True)
     np.random.seed(seed)
     train_ids, val_ids, test_ids = split_dataset(len(data['pr']), portion)
     np.save('test_ids.npy', test_ids)
@@ -381,7 +440,4 @@ def prepare_dataset_niko(seed, bs_train, bs_val,
 
 
 if __name__ == '__main__':
-    tl, vl = prepare_dataset(SEED, 32, 32)
-
-    print(len(tl))
-    print(len(vl))
+    pass
