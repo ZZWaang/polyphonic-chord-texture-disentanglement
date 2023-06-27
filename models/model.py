@@ -5,6 +5,7 @@ from torch import nn
 from torch.distributions import Normal
 import numpy as np
 
+from latentAR import zTransformer, InfoNCELoss
 from utils.utils import target_to_3dtarget
 from models.ptvae import RnnEncoder, RnnDecoder, PtvaeDecoder, TextureEncoder, NoteSummaryAttention, \
     PtvaeAttentionDecoder
@@ -149,7 +150,6 @@ class DisentangleVAE(PytorchModel):
                 x = torch.from_numpy(x).type(torch.LongTensor).cuda()
             else:
                 x = torch.from_numpy(x)
-
 
         def loss_for_inference(x, c, beta=0.1, weights=(1, 0.5)):
             outputs = pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, \
@@ -407,3 +407,190 @@ class DisentangleVoicingTextureVAE(PytorchModel):
         pitch_outs, dur_outs = self.decoder(dec_z, False, embedded_x, voicing_multi_hot, lengths, tfr1, tfr2)
         pitch_outs_c, dur_outs_c = self.voicing_decoder(z_voicing, False, embedded_c, lengths_c, tfr1, tfr2)
         return pitch_outs, dur_outs, dist_voicing, dist_rhy, pitch_outs_c, dur_outs_c
+
+
+class DisentangleARG(PytorchModel):
+
+    def __init__(self, name, device, chd_encoder, rhy_encoder, decoder,
+                 chd_decoder, arg_decoder, arg_loss_fun):
+        super(DisentangleARG, self).__init__(name, device)
+        self.chd_encoder = chd_encoder
+        self.rhy_encoder = rhy_encoder
+        self.decoder = decoder
+        self.num_step = self.decoder.num_step
+        self.chd_decoder = chd_decoder
+        self.arg_decoder = arg_decoder
+        self.arg_loss_fun = arg_loss_fun
+
+    def run(self, x, c, pr_mat, tfr1, tfr2, tfr3, confuse=True):
+        embedded_x, lengths = self.decoder.emb_x(x)
+        # cc = self.get_chroma(pr_mat)
+        dist_chd = self.chd_encoder(c)
+        # pr_mat = self.confuse_prmat(pr_mat)
+        dist_rhy = self.rhy_encoder(pr_mat)
+        z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
+        dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+        y_input = dec_z[:, :-1]
+        y_expected = dec_z[:, 1:]
+        pred = self.arg_decoder(y_input)
+        pred = pred[0]
+        positive = torch.permute(y_expected, (1, 0, 2))
+        negative = torch.concat([torch.unsqueeze(torch.cat((positive[: i, 0], positive[i + 1:, 0]), dim=0), dim=0) \
+                                 for i in range(positive.shape[0])], dim=0)
+
+        pitch_outs, dur_outs = self.decoder(dec_z, False, embedded_x, lengths, tfr1, tfr2)
+        recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chd, False, tfr3, c)
+        return pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, recon_chroma, recon_bass, pred, positive, negative
+
+    def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
+                      dist_rhy, recon_root, recon_chroma, recon_bass, pred, positive, negative,
+                      beta, weights, weighted_dur=False):
+        recon_loss, pl, dl = self.decoder.recon_loss(x, recon_pitch, recon_dur,
+                                                     weights, weighted_dur)
+        kl_loss, kl_chd, kl_rhy = self.kl_loss(dist_chd, dist_rhy)
+        chord_loss, root, chroma, bass = self.chord_loss(c, recon_root,
+                                                         recon_chroma,
+                                                         recon_bass)
+        arg_loss = self.arg_loss(pred, positive, negative, temperature=1)
+        loss = recon_loss + beta * kl_loss + chord_loss + arg_loss
+        return loss, recon_loss, pl, dl, kl_loss, kl_chd, kl_rhy, chord_loss, \
+               root, chroma, bass, arg_loss
+
+    def chord_loss(self, c, recon_root, recon_chroma, recon_bass):
+        loss_fun = nn.CrossEntropyLoss()
+        root = c[:, :, 0: 12].max(-1)[-1].view(-1).contiguous()
+        chroma = c[:, :, 12: 24].long().view(-1).contiguous()
+        bass = c[:, :, 24:].max(-1)[-1].view(-1).contiguous()
+
+        recon_root = recon_root.view(-1, 12).contiguous()
+        recon_chroma = recon_chroma.view(-1, 2).contiguous()
+        recon_bass = recon_bass.view(-1, 12).contiguous()
+        root_loss = loss_fun(recon_root, root)
+        chroma_loss = loss_fun(recon_chroma, chroma)
+        bass_loss = loss_fun(recon_bass, bass)
+        chord_loss = root_loss + chroma_loss + bass_loss
+        return chord_loss, root_loss, chroma_loss, bass_loss
+
+    def kl_loss(self, *dists):
+        # kl = kl_with_normal(dists[0])
+        kl_chd = kl_with_normal(dists[0])
+        kl_rhy = kl_with_normal(dists[1])
+        kl_loss = kl_chd + kl_rhy
+        return kl_loss, kl_chd, kl_rhy
+
+    def arg_loss(self, pred, positive, negative, temperature=1):
+        return self.arg_loss_fun(pred, positive, negative, temperature)
+
+    def loss(self, x, c, pr_mat, tfr1=0., tfr2=0., tfr3=0.,
+             beta=0.1, weights=(1, 0.5)):
+        outputs = self.run(x, c, pr_mat, tfr1, tfr2, tfr3)
+        loss = self.loss_function(x, c, *outputs, beta, weights)
+        return loss
+
+    def inference_encode(self, pr_mat, c):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+        return dist_chd, dist_rhy
+
+    def inference_decode(self, z_chd, z_rhy):
+        self.eval()
+        with torch.no_grad():
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+        return est_x
+
+    def inference(self, pr_mat, c, sample):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+        return est_x
+
+    def inference_with_loss(self, pr_mat, c, sample):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chd, False,
+                                                                    0., c)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+
+            x = np.array([target_to_3dtarget(i,
+                                             max_note_count=16,
+                                             max_pitch=128,
+                                             min_pitch=0,
+                                             pitch_pad_ind=130,
+                                             pitch_sos_ind=128,
+                                             pitch_eos_ind=129) for i in pr_mat.cpu()])
+            if torch.cuda.is_available():
+                x = torch.from_numpy(x).type(torch.LongTensor).cuda()
+            else:
+                x = torch.from_numpy(x)
+
+        def loss_for_inference(x, c, beta=0.1, weights=(1, 0.5)):
+            outputs = pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, \
+                      recon_chroma, recon_bass
+            loss = self.loss_function(x, c, *outputs, beta, weights)
+            return loss
+
+        return est_x, loss_for_inference(x, c)
+
+    def inference_save_z(self, pr_mat, c, sample, z_path):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            torch.save(dec_z, z_path)
+
+    def inference_only_decode(self, z, with_chord=False):
+        self.eval()
+        with torch.no_grad():
+            pitch_outs, dur_outs = self.decoder(z, True, None,
+                                                None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+            if with_chord:
+                z_chord = z[:, :256]
+                print(z_chord.shape)
+                recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chord, True,
+                                                                        0., None)
+                return est_x, recon_root, recon_chroma, recon_bass
+            return est_x
+
+    @staticmethod
+    def init_model(device=None, chd_size=256, txt_size=256, num_channel=10):
+        name = 'disvae'
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available()
+                                  else 'cpu')
+        # chd_encoder = RnnEncoder(36, 1024, 256)
+        chd_encoder = RnnEncoder(36, 1024, chd_size)
+        # rhy_encoder = TextureEncoder(256, 1024, 256)
+        rhy_encoder = TextureEncoder(256, 1024, txt_size, num_channel)
+        # pt_encoder = PtvaeEncoder(device=device, z_size=152)
+        # chd_decoder = RnnDecoder(z_dim=256)
+        chd_decoder = RnnDecoder(z_dim=chd_size)
+        # pt_decoder = PtvaeDecoder(note_embedding=None,
+        #                           dec_dur_hid_size=64, z_size=512)
+        pt_decoder = PtvaeDecoder(note_embedding=None,
+                                  dec_dur_hid_size=64,
+                                  z_size=chd_size + txt_size)
+        arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=12, dropout_p=0.1)
+        arg_loss_fun = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
+        model = DisentangleARG(name, device, chd_encoder,
+                               rhy_encoder, pt_decoder, chd_decoder, arg_decoder, arg_loss_fun)
+        return model

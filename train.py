@@ -1,7 +1,8 @@
 import argparse
 import warnings
 
-from models.model import DisentangleVAE, DisentangleVoicingTextureVAE
+from latentAR import zTransformer, InfoNCELoss
+from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG
 from models.ptvae import RnnEncoder, TextureEncoder, PtvaeDecoder, RnnDecoder, NoteSummaryAttention, \
     PtvaeAttentionDecoder
 from data_utils.dataset_loaders import MusicDataLoaders, TrainingVAE
@@ -53,8 +54,7 @@ if config.training_stage == 1:
     writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'kl_loss', 'kl_chd',
                     'kl_rhy', 'chord_loss', 'root_loss', 'chroma_loss', 'bass_loss']
 
-else:
-    assert config.training_stage == 2
+elif config.training_stage == 2:
     voicing_encoder = TextureEncoder(256, 1024, 256)
     rhy_encoder = TextureEncoder(256, 1024, 256)
     voicing_decoder = PtvaeDecoder(note_embedding=None,
@@ -69,6 +69,25 @@ else:
                                                 num_bar=8, contain_chord=True)
     writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'kl_loss', 'kl_chd',
                     'kl_rhy', 'recon_loss_c', 'pl_c', 'dl_c']
+
+elif config.training_stage == 3:
+    chd_encoder = RnnEncoder(36, 1024, 256)
+    voicing_encoder = TextureEncoder(256, 1024, 256)
+    chd_decoder = RnnDecoder(z_dim=256)
+    voicing_decoder = PtvaeDecoder(note_embedding=None,
+                                   dec_dur_hid_size=64, z_size=512)
+    arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=12, dropout_p=0.1)
+    arg_loss = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
+    model = DisentangleARG(config.name, config.device, chd_encoder,
+                           voicing_encoder, voicing_decoder, chd_decoder, arg_decoder, arg_loss)
+    data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_stage_a',
+                                                bs_train=config.batch_size, bs_val=config.batch_size,
+                                                portion=8, shift_low=-6, shift_high=5,
+                                                num_bar=2, contain_chord=True)
+    writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'kl_loss', 'kl_chd',
+                    'kl_rhy', 'chord_loss', 'root_loss', 'chroma_loss', 'bass_loss', 'arg_loss']
+else:
+    raise Exception
 
 log_path_mng = LogPathManager(config.readme_fn)
 

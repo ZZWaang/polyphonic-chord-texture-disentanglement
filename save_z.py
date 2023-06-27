@@ -70,10 +70,10 @@ def chroma2midi(chroma, bass):
 
 
 if __name__ == '__main__':
-    # for file in tqdm(os.listdir('zv')):
+    # for file in tqdm(os.listdir('zv_new')):
     #     try:
-    #         chord_midi = pretty_midi.PrettyMIDI(f'zv/{file}')
-    #         voicing_midi = pretty_midi.PrettyMIDI(f'zv/{file}')
+    #         chord_midi = pretty_midi.PrettyMIDI(f'zv_new/{file}')
+    #         voicing_midi = pretty_midi.PrettyMIDI(f'zv_new/{file}')
     #         chord = chord_data2matrix(chord_midi.instruments[0], chord_midi.get_downbeats(), 'quarter')
     #         chord = chord[::16, :]
     #         voicing = midi2pr(voicing_midi, down_sample=4)
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     #         while len(voicing) < 32:
     #             voicing = np.row_stack((voicing, np.array([0]*128)))
     #         name = file.split('.')[0]+'.pt'
-    #         inference_stage1(chord, voicing, checkpoint='data/train_stage1_20220818.pt', save_z=f'zs/s1/{name}')
+    #         inference_stage1(chord, voicing, checkpoint='result_2023-06-06_122449/models/disvae-nozoth_final.pt', save_z=f'zs/s1/{name}')
     #     except:
     #         print(file)
 
@@ -106,25 +106,25 @@ if __name__ == '__main__':
     #     voicing = np.row_stack((voicing, np.array([0]*128)))
     # pr2midi(voicing).write('inspect.mid')
     # inference_stage1(chord, voicing, checkpoint='data/train_stage1_20220818.pt', save_z='hahaha.pt')
-    # for folder in os.listdir('infer_output/ouput_0523'):
-    #     for file in os.listdir(f'infer_output/ouput_0523/{folder}'):
-    #         if file.endswith('.pt') and 'output' in file:
-    #             z = torch.load(f'infer_output/ouput_0523/{folder}/{file}', map_location=torch.device('cuda'))
-    #             for i in range(len(z)):
-    #                 print(file, i)
-    #                 # recon_root, recon_chroma, recon_bass = inference_stage1_chord(None, None,
-    #                 #                                                               checkpoint='data/train_stage1_20220818.pt',
-    #                 #                                                               decode_z=z[i].unsqueeze(0))
-    #                 # recon_chroma = recon_chroma.squeeze(0).cpu().detach().numpy()
-    #                 # recon_root = recon_root.squeeze(0).cpu().detach().numpy()
-    #                 # chroma2midi(recon_chroma, recon_root).write(f'infer_output/ouput_0523/{folder}/{file.split(".")[0]}_{i}_chord.mid')
-    #                 est_x = inference_stage1(None, None, checkpoint='data/train_stage1_20220818.pt', save_z=None,
-    #                                          decode_z=z[i].unsqueeze(0))
-    #                 accompaniment_generation(est_x, 30).write(f'infer_output/ouput_0523/{folder}/{file.split(".")[0]}_{i}.mid')
-    z = torch.load(r'D:\projects\polydis2\zs\s1\487-23.pt', map_location=torch.device('cuda'))
-    est_x = inference_stage1(None, None, checkpoint='data/train_stage1_20220818.pt', save_z=None, decode_z=z)
-    accompaniment_generation(est_x, 30).write('487-23.mid')
-    z = torch.load(r'D:\projects\polydis2\zs\s1\487-31.pt', map_location=torch.device('cuda'))
-    est_x = inference_stage1(None, None, checkpoint='data/train_stage1_20220818.pt', save_z=None,
-                             decode_z=z)
-    accompaniment_generation(est_x, 30).write('487-31.mid')
+    for file in os.listdir(f'infer_output/test_numlayers6_lr0.001_epoch5'):
+        if file.endswith('.pt') and 'output' in file:
+            z = torch.load(f'infer_output/test_numlayers6_lr0.001_epoch5/{file}', map_location=torch.device('cuda'))
+            for i in range(len(z)):
+                print(file, i)
+                # recon_root, recon_chroma, recon_bass = inference_stage1_chord(None, None,
+                #                                                               checkpoint='data/train_stage1_20220818.pt',
+                #                                                               decode_z=z[i].unsqueeze(0))
+                # recon_chroma = recon_chroma.squeeze(0).cpu().detach().numpy()
+                # recon_root = recon_root.squeeze(0).cpu().detach().numpy()
+                # chroma2midi(recon_chroma, recon_root).write(f'infer_output/ouput_0523/{folder}/{file.split(".")[0]}_{i}_chord.mid')
+                est_x = inference_stage1(None, None, checkpoint='result_2023-06-06_122449/models/disvae-nozoth_final.pt', save_z=None,
+                                         decode_z=z[i].unsqueeze(0))
+                accompaniment_generation(est_x, 30).write(f'infer_output/test_numlayers6_lr0.001_epoch5/{file.split(".")[0]}_{i}.mid')
+
+    # z = torch.load(r'D:\projects\polydis2\zs\s1\487-23.pt', map_location=torch.device('cuda'))
+    # est_x = inference_stage1(None, None, checkpoint='data/train_stage1_20220818.pt', save_z=None, decode_z=z)
+    # accompaniment_generation(est_x, 30).write('487-23.mid')
+    # z = torch.load(r'D:\projects\polydis2\zs\s1\487-31.pt', map_location=torch.device('cuda'))
+    # est_x = inference_stage1(None, None, checkpoint='data/train_stage1_20220818.pt', save_z=None,
+    #                          decode_z=z)
+    # accompaniment_generation(est_x, 30).write('487-31.mid')

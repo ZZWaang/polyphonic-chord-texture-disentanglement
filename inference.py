@@ -154,26 +154,40 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
 
 
 if __name__ == '__main__':
-    for i in range(1, 3):
-        PATH = f'experiments/20230321/{i}/'
+    # for i in range(1, 3):
+    #     PATH = f'experiments/20230321/{i}/'
+    #     CHORD_PATH = PATH + 'c.mid'
+    #     VOICING_PATH = PATH + 'v.mid'
+    #     TEXTURE_PATH = PATH + 't.mid'
+    #     STAGE1_CP = 'data/train_stage1_20220818.pt'
+    #     STAGE2_CP = 'data/train_stage2_20221009.pt'
+    #     VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
+    #     RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
+    #     RECON_WRITE_PATH = PATH + 'recon.mid'
+    #     recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
+    #         chord_provider=CHORD_PATH,
+    #         voicing_provider=VOICING_PATH,
+    #         texture_provider=TEXTURE_PATH,
+    #         stage1_checkpoint=STAGE1_CP,
+    #         stage2_checkpoint=STAGE2_CP,
+    #         with_voicing_recon=True)
+    #     recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
+    #     recon.write(RECON_WRITE_PATH) if recon is not None else None
+    #     recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
+    # print("task finished")
+
+    for i in range(1, 2):
+        PATH = f'experiments/20230607/{i}/'
         CHORD_PATH = PATH + 'c.mid'
         VOICING_PATH = PATH + 'v.mid'
-        TEXTURE_PATH = PATH + 't.mid'
-        STAGE1_CP = 'data/train_stage1_20220818.pt'
-        STAGE2_CP = 'data/train_stage2_20221009.pt'
-        VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
-        RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
+        STAGE1_CP = 'result_2023-06-06_122449/models/disvae-nozoth_final.pt'
         RECON_WRITE_PATH = PATH + 'recon.mid'
-        recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
-            chord_provider=CHORD_PATH,
-            voicing_provider=VOICING_PATH,
-            texture_provider=TEXTURE_PATH,
-            stage1_checkpoint=STAGE1_CP,
-            stage2_checkpoint=STAGE2_CP,
-            with_voicing_recon=True)
-        recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
+        recon = inference_chord_voicing_disentanglement(
+            c_path=CHORD_PATH,
+            v_path=VOICING_PATH,
+            checkpoint=STAGE1_CP,
+        )
         recon.write(RECON_WRITE_PATH) if recon is not None else None
-        recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
     print("task finished")
     # midi = generate_pop909_test_sample()
     # midi.write('pop909.mid')

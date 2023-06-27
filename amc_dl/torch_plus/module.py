@@ -133,6 +133,7 @@ class TrainingInterface:
 
         for i, batch in enumerate(self.data_loaders.train_loader):
             inputs = self._batch_to_inputs(batch)[:-1]
+            inputs = [torch.tensor([i, i], device=self.device) for i in inputs]
             self.opt_scheduler.optimizer_zero_grad()
             input_params = self.param_scheduler.step()
             outputs = self.model('train', *inputs, **input_params)
