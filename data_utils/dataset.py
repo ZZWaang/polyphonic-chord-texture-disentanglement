@@ -214,7 +214,7 @@ class ArrangementDataset(Dataset):
                     concat_data[key] = np.array([i[key] for i in all_batch_data])
             batch_data = concat_data
         self.cache[id] = batch_data
-        print(batch_data)
+
         return batch_data
 
 

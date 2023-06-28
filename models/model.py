@@ -517,16 +517,22 @@ class DisentangleARG(PytorchModel):
             dist_chd = self.chd_encoder(c)
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
-            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
-            pred = self.arg_decoder(dec_z)
-            for i in range(4):
-                pred = torch.cat([pred, self.arg_decoder(dec_z)], dim=0)
-                pred = self.arg_decoder(pred)
-
-            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1).unsqueeze(0)
+            pred = self.arg_decoder(dec_z)[0]
+            all_est_x = []
+            pitch_outs, dur_outs = self.decoder(pred, True, None,
                                                 None, 0., 0.)
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
-        return est_x
+            all_est_x.append(est_x)
+            for i in range(4):
+                dec_z = torch.cat([dec_z, pred], dim=0)
+                pred = self.arg_decoder(dec_z)[0]
+                pitch_outs, dur_outs = self.decoder(pred, True, None,
+                                                    None, 0., 0.)
+                est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+                all_est_x.append(est_x)
+
+        return all_est_x
 
     def inference_with_loss(self, pr_mat, c, sample):
         self.eval()

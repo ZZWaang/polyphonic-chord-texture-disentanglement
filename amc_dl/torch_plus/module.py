@@ -148,6 +148,8 @@ class TrainingInterface:
                                             self.train_step)
             self.train_step += 1
             print(self.train_step)
+            if self.train_step % 200 == 0:
+                self.save_model(self.path_mng.final_model_path(self.name))
         return epoch_loss_dic
 
     def _sum_parallel_loss(self, loss):
