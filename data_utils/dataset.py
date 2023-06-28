@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -19,9 +21,10 @@ SEED = 3345
 class ArrangementDataset(Dataset):
 
     def __init__(self, data, indicator, shift_low, shift_high, num_bar=8,
-                 ts=4, contain_chord=False, contain_voicing=False):
+                 ts=4, contain_chord=False, contain_voicing=False, full_song=False):
         super(ArrangementDataset, self).__init__()
         self.separated_data = data
+        self.separated_data_index = self._get_separated_data_index()
         self.data = np.concatenate(data)
         self.separated_indicator = indicator
         self.indicator = np.concatenate(indicator)
@@ -33,7 +36,17 @@ class ArrangementDataset(Dataset):
         self.ts = ts
         self.contain_chord = contain_chord
         self.contain_voicing = contain_voicing
+        self.full_song = full_song
         self.cache = {}
+
+    def _get_separated_data_index(self):
+        idx = {}
+        count = 0
+        for i in range(len(self.separated_data)):
+            for j in range(len(self.separated_data[i])):
+                idx[count] = (i, j)
+                count += 1
+        return idx
 
     def _get_sample_inds(self):
         valid_inds = []
@@ -81,39 +94,8 @@ class ArrangementDataset(Dataset):
         # return len(self.separated_data)
         return self.num_sample * (self.shift_high - self.shift_low + 1)
 
-    def __getitem__(self, id):
-        if id in self.cache:
-            return self.cache[id]
-        # separate id into (no, shift) pair
-        no = id // (self.shift_high - self.shift_low + 1)
-        shift = id % (self.shift_high - self.shift_low + 1) + self.shift_low
+    def __my_getitem__(self, data, shift):
 
-        ##### For Temporary Use: save music segments #####
-
-        # song = self.separated_data[id]
-        # song_indicator = self.separated_indicator[id]
-        # data = []
-        #
-        # for j in range(len(song)):
-        #     if not song_indicator[j]:
-        #         continue
-        #     else:
-        #         data.append(song[j])
-        #         if len(data) == self.num_bar:
-        #             acc = [x[1] for x in data]
-        #             acc_segments = [
-        #                 ext_nmat_to_pr(self._combine_segments(acc[i: i + self.num_bar]), num_step=16 * self.num_bar)
-        #                 for i in range(0, self.num_bar, self.num_bar)]
-        #             # do augmentation
-        #             acc_segments = np.array([augment_pr(pr, shift) for pr in acc_segments])
-        #             onset_sus_pr2midi(acc_segments[0]).write(f'z/{id}-{j}.mid')
-        #             data = []
-        # return True
-
-        ############################
-
-        ind = self.valid_inds[no]
-        data = self.data[ind: ind + self.num_bar]
         # data is a list of length num_bar
         # each element is a list containing mel and acc matrices
 
@@ -192,7 +174,47 @@ class ArrangementDataset(Dataset):
             batch_data['p_grids_voicing'] = p_grids_voicing
             batch_data['voicing_multi_hot'] = voicing_multi_hot
 
+        return batch_data
+
+    def __getitem__(self, id):
+        if id in self.cache:
+            return self.cache[id]
+        # separate id into (no, shift) pair
+        no = id // (self.shift_high - self.shift_low + 1)
+        shift = id % (self.shift_high - self.shift_low + 1) + self.shift_low
+        if not self.full_song:
+            ind = self.valid_inds[no]
+            data = self.data[ind: ind + self.num_bar]
+            batch_data = self.__my_getitem__(data, shift)
+        else:
+            ind = self.valid_inds[no]
+            separated_ind = self.separated_data_index[ind]
+            song_id = separated_ind[0]
+            all_ids = [separated_ind]
+            for i in range(4):
+
+                next_no = no + self.num_bar
+                next_separated_ind = self.separated_data_index[next_no]
+                all_ids.append(next_separated_ind)
+                no = next_no
+
+            all_batch_data = []
+            for id in all_ids:
+                data = self.separated_data[id[0]][id[1]: id[1] + self.num_bar]
+                batch_data = self.__my_getitem__(data, shift)
+                while len(batch_data['chord']) < 8:
+                    batch_data['chord'] = np.zeros((8, 36), dtype=float)
+                all_batch_data.append(batch_data)
+
+            concat_data = {}
+            for key in batch_data:
+                if key == 'chord':
+                    concat_data[key] = np.array([i[key] for i in all_batch_data])
+                else:
+                    concat_data[key] = np.array([i[key] for i in all_batch_data])
+            batch_data = concat_data
         self.cache[id] = batch_data
+
         return batch_data
 
 
@@ -326,7 +348,7 @@ def split_dataset(length, portion):
     return train_ind, valid_ind, test_ind
 
 
-def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, prepare_voicing=False, cache_name=''):
+def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, prepare_voicing=False, cache_name='', full_song=False):
     def load_cache():
         if 'cache' in os.listdir('./'):
             if f'wrap_dataset_cache_{cache_name}.npz' in os.listdir('cache'):
@@ -345,7 +367,7 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, prepare
     if data != []:
         print(f'Using cached dataset with cache name {cache_name}')
         dataset = ArrangementDataset(data, indicator, shift_low, shift_high,
-                                     num_bar=num_bar, contain_chord=True, contain_voicing=prepare_voicing)
+                                     num_bar=num_bar, contain_chord=True, contain_voicing=prepare_voicing, full_song=full_song)
         return dataset
     if niko:
         pr, c = fns['pr'], fns['c']
@@ -355,8 +377,8 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, prepare
         data_track, indct, db_pos = music.prepare_data(num_bar=num_bar)
         data.append(data_track)
         indicator.append(indct)
-    dataset = ArrangementDataset(data, indicator, shift_low, shift_high,
-                                 num_bar=num_bar, contain_chord=True, contain_voicing=prepare_voicing)
+    dataset = ArrangementDataset(data, indicator, shift_low, shift_high, num_bar=num_bar,
+                                 contain_chord=True, contain_voicing=prepare_voicing, full_song=full_song)
     save_cache()
     return dataset
 
@@ -412,16 +434,18 @@ def prepare_dataset_niko(seed, bs_train, bs_val,
 
 def prepare_dataset_pop909_stage_a(seed, bs_train, bs_val,
                                    portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True,
-                                   random_val=False):
+                                   random_val=False, full_song=False):
     return prepare_niko_like_dataset(seed, bs_train, bs_val,
                                      portion=portion, shift_low=shift_low, shift_high=shift_high, num_bar=num_bar,
                                      random_train=random_train,
                                      random_val=random_val,
+                                     full_song=full_song,
                                      name='pop909_stage_a.npz')
 
 
 def prepare_niko_like_dataset(seed, bs_train, bs_val,
                               portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False,
+                              full_song=False,
                               name='poly-dis-niko.npz'):
     print('Loading Training Data...')
     data = np.load(f'data/{name}', allow_pickle=True)
@@ -430,9 +454,9 @@ def prepare_niko_like_dataset(seed, bs_train, bs_val,
     np.save('test_ids.npy', test_ids)
     print('Constructing Training Set')
     train_set = wrap_dataset(data, train_ids, shift_low, shift_high,
-                             num_bar=num_bar, niko=True, cache_name='niko_train')
+                             num_bar=num_bar, niko=True, cache_name='niko_train', full_song=full_song)
     print('Constructing Validation Set')
-    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True, cache_name='niko_val')
+    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True, cache_name='niko_val', full_song=full_song)
     print(f'Done with {len(train_set)} training samples, {len(val_set)} validation samples')
     train_loader = DataLoader(train_set, bs_train, random_train)
     val_loader = DataLoader(val_set, bs_val, random_val)

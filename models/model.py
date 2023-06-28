@@ -423,13 +423,18 @@ class DisentangleARG(PytorchModel):
         self.arg_loss_fun = arg_loss_fun
 
     def run(self, x, c, pr_mat, tfr1, tfr2, tfr3, confuse=True):
-        embedded_x, lengths = self.decoder.emb_x(x)
-        # cc = self.get_chroma(pr_mat)
-        dist_chd = self.chd_encoder(c)
-        # pr_mat = self.confuse_prmat(pr_mat)
-        dist_rhy = self.rhy_encoder(pr_mat)
-        z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
-        dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+
+        all_dec_z = []
+        for idx in range(len(x)):
+
+            # cc = self.get_chroma(pr_mat)
+            dist_chd = self.chd_encoder(c[idx].unsqueeze(0))
+            # pr_mat = self.confuse_prmat(pr_mat)
+            dist_rhy = self.rhy_encoder(pr_mat[idx].unsqueeze(0))
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            all_dec_z.append(dec_z)
+        dec_z = torch.cat(all_dec_z, dim=0).unsqueeze(0)
         y_input = dec_z[:, :-1]
         y_expected = dec_z[:, 1:]
         pred = self.arg_decoder(y_input)
@@ -438,23 +443,23 @@ class DisentangleARG(PytorchModel):
         negative = torch.concat([torch.unsqueeze(torch.cat((positive[: i, 0], positive[i + 1:, 0]), dim=0), dim=0) \
                                  for i in range(positive.shape[0])], dim=0)
 
-        pitch_outs, dur_outs = self.decoder(dec_z, False, embedded_x, lengths, tfr1, tfr2)
-        recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chd, False, tfr3, c)
-        return pitch_outs, dur_outs, dist_chd, dist_rhy, recon_root, recon_chroma, recon_bass, pred, positive, negative
+        embedded_x, lengths = self.decoder.emb_x(x[-1].unsqueeze(0))
 
-    def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
-                      dist_rhy, recon_root, recon_chroma, recon_bass, pred, positive, negative,
+        dec_z = pred[-1].unsqueeze(0)
+        pitch_outs, dur_outs = self.decoder(dec_z, False, embedded_x, lengths, tfr1, tfr2)
+        recon_root, recon_chroma, recon_bass = self.chd_decoder(dec_z[:, 0:256], False, tfr3, c[-1].unsqueeze(0))
+        return pitch_outs, dur_outs, recon_root, recon_chroma, recon_bass, pred, positive, negative
+
+    def loss_function(self, x, c, recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, pred, positive, negative,
                       beta, weights, weighted_dur=False):
-        recon_loss, pl, dl = self.decoder.recon_loss(x, recon_pitch, recon_dur,
+        recon_loss, pl, dl = self.decoder.recon_loss(x[-1].unsqueeze(0), recon_pitch, recon_dur,
                                                      weights, weighted_dur)
-        kl_loss, kl_chd, kl_rhy = self.kl_loss(dist_chd, dist_rhy)
-        chord_loss, root, chroma, bass = self.chord_loss(c, recon_root,
+        chord_loss, root, chroma, bass = self.chord_loss(c[-1].unsqueeze(0), recon_root,
                                                          recon_chroma,
                                                          recon_bass)
         arg_loss = self.arg_loss(pred, positive, negative, temperature=1)
-        loss = recon_loss + beta * kl_loss + chord_loss + arg_loss
-        return loss, recon_loss, pl, dl, kl_loss, kl_chd, kl_rhy, chord_loss, \
-               root, chroma, bass, arg_loss
+        loss = recon_loss + chord_loss + arg_loss
+        return loss, recon_loss, pl, dl, chord_loss, root, chroma, bass, arg_loss
 
     def chord_loss(self, c, recon_root, recon_chroma, recon_bass):
         loss_fun = nn.CrossEntropyLoss()
@@ -483,6 +488,9 @@ class DisentangleARG(PytorchModel):
 
     def loss(self, x, c, pr_mat, tfr1=0., tfr2=0., tfr3=0.,
              beta=0.1, weights=(1, 0.5)):
+        x = x.squeeze(0)
+        c = c.squeeze(0)
+        pr_mat = pr_mat.squeeze(0)
         outputs = self.run(x, c, pr_mat, tfr1, tfr2, tfr3)
         loss = self.loss_function(x, c, *outputs, beta, weights)
         return loss

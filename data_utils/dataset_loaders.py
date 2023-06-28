@@ -9,7 +9,7 @@ class MusicDataLoaders(DataLoaders):
     @staticmethod
     def get_loaders(seed, dataset_name, bs_train, bs_val,
                     portion=8, shift_low=-6, shift_high=5, num_bar=2,
-                    contain_chord=True, random_train=True, random_val=False):
+                    contain_chord=True, random_train=True, random_val=False, full_song=False):
         if dataset_name == 'niko':
             train, val = prepare_dataset_niko(seed, bs_train, bs_val, portion, shift_low,
                                               shift_high, num_bar, random_train, random_val)
@@ -21,7 +21,7 @@ class MusicDataLoaders(DataLoaders):
                                          shift_high, num_bar, random_train, random_val)
         elif dataset_name == 'pop909_stage_a':
             train, val = prepare_dataset_pop909_stage_a(seed, bs_train, bs_val, portion, shift_low,
-                                              shift_high, num_bar, random_train, random_val)
+                                              shift_high, num_bar, random_train, random_val, full_song)
         else:
             raise Exception
         return MusicDataLoaders(train, val, bs_train, bs_val)

@@ -135,7 +135,8 @@ class TransformerDecoder(nn.Module):
 
     def forward(self, inputs, inputs_pad):
         # |inputs| : (batch_size, seq_len, z_dim)
-        positions = torch.arange(inputs_pad.size(1), device=inputs_pad.device, dtype=inputs_pad.dtype).repeat(inputs_pad.size(0), 1) + 1
+        positions = torch.arange(inputs_pad.size(1), device=inputs_pad.device, dtype=inputs_pad.dtype).repeat(
+            inputs_pad.size(0), 1) + 1
         print(positions)
         position_pad_mask = inputs_pad.eq(self.pad_id)
         print(position_pad_mask)
@@ -202,7 +203,7 @@ class ARG(nn.Module):
 
 
 if __name__ == '__main__':
-    a = torch.tensor([0, 1, 2, 2])
-    i = torch.tensor([5, 8, 10, 10])
-    a = a[i.eq(10)]
-    print(a)
+    a = torch.tensor([[0, 1, 2, 2], [1, 2, 3, 4]])
+    b = torch.unsqueeze(a, 0)
+    c = torch.concat()
+    print(b)
