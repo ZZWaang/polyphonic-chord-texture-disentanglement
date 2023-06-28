@@ -518,6 +518,11 @@ class DisentangleARG(PytorchModel):
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pred = self.arg_decoder(dec_z)
+            for i in range(4):
+                pred = torch.cat([pred, self.arg_decoder(dec_z)], dim=0)
+                pred = self.arg_decoder(pred)
+
             pitch_outs, dur_outs = self.decoder(dec_z, True, None,
                                                 None, 0., 0.)
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)

@@ -88,6 +88,7 @@ elif config.training_stage == 3:
     arg_loss = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
     model = DisentangleARG(config.name, config.device, chd_encoder,
                            voicing_encoder, voicing_decoder, chd_decoder, arg_decoder, arg_loss)
+    model.load_state_dict(torch.load('result_2023-06-06_122449/models/disvae-nozoth_final.pt', map_location=config.device), strict=False)
     data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_stage_a',
                                                 bs_train=config.batch_size, bs_val=config.batch_size,
                                                 portion=8, shift_low=-6, shift_high=5,
