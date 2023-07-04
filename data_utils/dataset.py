@@ -191,27 +191,27 @@ class ArrangementDataset(Dataset):
             separated_ind = self.separated_data_index[ind]
             song_id = separated_ind[0]
             all_ids = [separated_ind]
-            for i in range(4):
-
-                next_no = no + self.num_bar
-                next_separated_ind = self.separated_data_index[next_no]
-                all_ids.append(next_separated_ind)
-                no = next_no
-
+            while True:
+                next_ind = ind + self.num_bar
+                next_separated_ind = self.separated_data_index[next_ind]
+                if next_separated_ind[0] == song_id:
+                    all_ids.append(next_separated_ind)
+                    ind = next_ind
+                else:
+                    break
+            if len(all_ids) == 1:
+                all_ids.append(all_ids[0])
             all_batch_data = []
             for id in all_ids:
                 data = self.separated_data[id[0]][id[1]: id[1] + self.num_bar]
                 batch_data = self.__my_getitem__(data, shift)
-                while len(batch_data['chord']) < 8:
-                    batch_data['chord'] = np.zeros((8, 36), dtype=float)
+                # while len(batch_data['chord']) < 8:
+                #     batch_data['chord'] = np.zeros((8, 36), dtype=float)
                 all_batch_data.append(batch_data)
 
             concat_data = {}
             for key in batch_data:
-                if key == 'chord':
-                    concat_data[key] = np.array([i[key] for i in all_batch_data])
-                else:
-                    concat_data[key] = np.array([i[key] for i in all_batch_data])
+                concat_data[key] = np.array([i[key] for i in all_batch_data])
             batch_data = concat_data
         self.cache[id] = batch_data
 
@@ -371,12 +371,25 @@ def wrap_dataset(fns, ids, shift_low, shift_high, num_bar=8, niko=False, prepare
         return dataset
     if niko:
         pr, c = fns['pr'], fns['c']
-    for ind in tqdm(ids):
-        music = init_music(fns[ind], prepare_voicing=prepare_voicing) if not niko else NikoChordProgression(pr[ind],
-                                                                                                            c[ind])
-        data_track, indct, db_pos = music.prepare_data(num_bar=num_bar)
-        data.append(data_track)
-        indicator.append(indct)
+    if not full_song:
+        for ind in tqdm(ids):
+            music = init_music(fns[ind], prepare_voicing=prepare_voicing) if not niko else NikoChordProgression(pr[ind],
+                                                                                                                c[ind])
+            data_track, indct, db_pos = music.prepare_data(num_bar=num_bar)
+            data.append(data_track)
+            indicator.append(indct)
+    else:
+        for ind in tqdm(ids):
+            data_track, indct = [], []
+            for i in range(len(pr[ind])):
+                music = NikoChordProgression(np.array(pr[ind][i], dtype=int), np.array(c[ind][i], dtype=int))
+                _data_track, _indct, db_pos = music.prepare_data(num_bar=num_bar)
+                data_track.append(_data_track)
+                indct.append(_indct)
+            data_track = np.concatenate(data_track, axis=0)
+            indct = np.concatenate(indct, axis=0)
+            data.append(data_track)
+            indicator.append(indct)
     dataset = ArrangementDataset(data, indicator, shift_low, shift_high, num_bar=num_bar,
                                  contain_chord=True, contain_voicing=prepare_voicing, full_song=full_song)
     save_cache()
@@ -464,4 +477,5 @@ def prepare_niko_like_dataset(seed, bs_train, bs_val,
 
 
 if __name__ == '__main__':
-    pass
+    data = np.load('../data/pop909_stage_a.npz', allow_pickle=True)
+    print(data['pr'].shape)

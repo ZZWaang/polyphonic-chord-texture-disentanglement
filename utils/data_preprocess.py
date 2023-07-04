@@ -11,7 +11,20 @@ np.set_printoptions(threshold=np.inf)
 def prepare_pop909_stage_a_dataset():
     all_chord_data = []
     all_prs = []
+    song_idx = 0
+    song_prs = []
+    song_chord_data = []
     for file in tqdm(os.listdir('../zv_new')):
+        check = int(file.split('-')[0])
+        if check != song_idx:
+            song_idx = check
+            if len(song_prs) != 0:
+                all_prs.append(song_prs)
+                all_chord_data.append(song_chord_data)
+                song_prs = []
+                song_chord_data = []
+            else:
+                print(file)
         midi = pretty_midi.PrettyMIDI('../zv_new/' + file)
         downbeats = midi.get_downbeats()
         track = midi.instruments[0]
@@ -25,8 +38,8 @@ def prepare_pop909_stage_a_dataset():
         pr = pr[::2]
         if len(pr) != 64 or len(chord_data) != 64:
             continue
-        all_prs.append(pr)
-        all_chord_data.append(chord_data)
+        song_prs.append(pr)
+        song_chord_data.append(chord_data)
 
     print(len(all_prs), len(all_chord_data))
     all_prs = np.array(all_prs)

@@ -152,18 +152,18 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
             recon = inference_stage2(recon_voicing, texture, checkpoint=stage2_checkpoint)
             return recon, recon_chord_voicing_midi
 
-def inference_stage_a_arg(prompt):
+def inference_stage_a_arg(prompt, checkpoint):
     midi = pyd.PrettyMIDI(prompt)
     c = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quarter')
     c = c[::16, :]
     v = midi2pr(midi.instruments[0], down_sample=4)
 
     acc_ensemble = melody_split(v, window_size=32, hop_size=32, vector_size=128)
-    chord_table = chord_split(v, 8, 8)
+    chord_table = chord_split(c, 8, 8)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = DisentangleARG.init_model(device).to(device)
     checkpoint = torch.load(checkpoint, map_location=device)
-    model.load_state_dict(checkpoint)
+    model.load_state_dict(checkpoint, strict=False)
     pr_matrix = torch.from_numpy(acc_ensemble).float().to(device)
     gt_chord = torch.from_numpy(chord_table).float().to(device)
     all_est_x = model.inference(pr_matrix, gt_chord, sample=False)
@@ -211,7 +211,12 @@ if __name__ == '__main__':
     #     recon.write(RECON_WRITE_PATH) if recon is not None else None
     # print("task finished")
 
-    pass
+    for i in range(1, 6):
+        print(i)
+        PATH = f'experiments/20230628/{i}/'
+        recons = inference_stage_a_arg(PATH + 'p.mid', 'result_2023-06-06_122449/models/disvae-nozoth_final.pt')
+        for j, recon in enumerate(recons):
+            recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
 
     # midi = generate_pop909_test_sample()
     # midi.write('pop909.mid')
@@ -220,4 +225,3 @@ if __name__ == '__main__':
     # path = 'experiments/20230321/2'
     # texture_midi = pretty_midi.PrettyMIDI(path + '/t.mid')
     # extract_voicing(texture_midi).write(path + '/v.mid')
-

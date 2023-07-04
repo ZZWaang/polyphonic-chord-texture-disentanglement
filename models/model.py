@@ -424,17 +424,11 @@ class DisentangleARG(PytorchModel):
 
     def run(self, x, c, pr_mat, tfr1, tfr2, tfr3, confuse=True):
 
-        all_dec_z = []
-        for idx in range(len(x)):
+        dist_chd = self.chd_encoder(c)
+        dist_rhy = self.rhy_encoder(pr_mat)
+        z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], False)
+        dec_z = torch.cat([z_chd, z_rhy], dim=-1).unsqueeze(0)
 
-            # cc = self.get_chroma(pr_mat)
-            dist_chd = self.chd_encoder(c[idx].unsqueeze(0))
-            # pr_mat = self.confuse_prmat(pr_mat)
-            dist_rhy = self.rhy_encoder(pr_mat[idx].unsqueeze(0))
-            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
-            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
-            all_dec_z.append(dec_z)
-        dec_z = torch.cat(all_dec_z, dim=0).unsqueeze(0)
         y_input = dec_z[:, :-1]
         y_expected = dec_z[:, 1:]
         pred = self.arg_decoder(y_input)
@@ -525,8 +519,8 @@ class DisentangleARG(PytorchModel):
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
             all_est_x.append(est_x)
             for i in range(4):
-                dec_z = torch.cat([dec_z, pred], dim=0)
-                pred = self.arg_decoder(dec_z)[0]
+                dec_z = torch.cat([dec_z.squeeze(0), pred[-1].unsqueeze(0)], dim=0)
+                pred = self.arg_decoder(dec_z.unsqueeze(0))[0]
                 pitch_outs, dur_outs = self.decoder(pred, True, None,
                                                     None, 0., 0.)
                 est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
