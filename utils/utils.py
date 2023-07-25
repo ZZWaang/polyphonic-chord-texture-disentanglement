@@ -150,6 +150,8 @@ def target_to_3dtarget(pr_mat, max_note_count=11, max_pitch=107, min_pitch=22,
         binary = np.binary_repr(int(pr_mat[t, p]) - 1, width=5)
         pr_mat3d[t, cur_idx[t], 1: 6] = \
             np.fromstring(' '.join(list(binary)), dtype=int, sep=' ')
+        if cur_idx[t] == max_note_count - 1:
+            continue
         cur_idx[t] += 1
     pr_mat3d[np.arange(0, 32), cur_idx, 0] = pitch_eos_ind
     return pr_mat3d

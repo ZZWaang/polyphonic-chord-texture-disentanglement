@@ -44,7 +44,7 @@ def prepare_pop909_stage_a_dataset():
     print(len(all_prs), len(all_chord_data))
     all_prs = np.array(all_prs)
     all_chord_data = np.array(all_chord_data)
-    np.savez_compressed('../data/pop909_stage_a.npz', pr=all_prs, c=all_chord_data)
+    np.savez_compressed('../data/pop909_stage_a_old.npz', pr=all_prs, c=all_chord_data)
 
 
 def preprocess_zv():
@@ -61,4 +61,22 @@ def preprocess_zv():
 
 
 if __name__ == '__main__':
-    prepare_pop909_stage_a_dataset()
+    # prepare_pop909_stage_a_dataset()
+    file = np.load('../data/pop909_stage_a.npz', allow_pickle=True)
+    data = file['pr']
+    c = file['c']
+    for i in data:
+        for j in i:
+            for t in j:
+                count = 0
+                for p in range(128):
+                    if t[p] != 0:
+                        t[p] = 8
+    # for i in data:
+    #     for j in i:
+    #         for t in j:
+    #             count = 0
+    #             for p in range(128):
+    #                 if t[p] != 0:
+    #                     print(t[p])
+    np.savez_compressed('../data/pop909_stage_a.npz', pr=data, c=c, allow_pickle=True)

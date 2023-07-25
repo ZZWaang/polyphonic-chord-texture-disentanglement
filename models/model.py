@@ -437,18 +437,17 @@ class DisentangleARG(PytorchModel):
         negative = torch.concat([torch.unsqueeze(torch.cat((positive[: i, 0], positive[i + 1:, 0]), dim=0), dim=0) \
                                  for i in range(positive.shape[0])], dim=0)
 
-        embedded_x, lengths = self.decoder.emb_x(x[-1].unsqueeze(0))
+        embedded_x, lengths = self.decoder.emb_x(x[1:])
 
-        dec_z = pred[-1].unsqueeze(0)
-        pitch_outs, dur_outs = self.decoder(dec_z, False, embedded_x, lengths, tfr1, tfr2)
-        recon_root, recon_chroma, recon_bass = self.chd_decoder(dec_z[:, 0:256], False, tfr3, c[-1].unsqueeze(0))
+        pitch_outs, dur_outs = self.decoder(pred, False, embedded_x, lengths, tfr1, tfr2)
+        recon_root, recon_chroma, recon_bass = self.chd_decoder(pred[:, 0:256], False, tfr3, c[1:])
         return pitch_outs, dur_outs, recon_root, recon_chroma, recon_bass, pred, positive, negative
 
     def loss_function(self, x, c, recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, pred, positive, negative,
                       beta, weights, weighted_dur=False):
-        recon_loss, pl, dl = self.decoder.recon_loss(x[-1].unsqueeze(0), recon_pitch, recon_dur,
+        recon_loss, pl, dl = self.decoder.recon_loss(x[1:], recon_pitch, recon_dur,
                                                      weights, weighted_dur)
-        chord_loss, root, chroma, bass = self.chord_loss(c[-1].unsqueeze(0), recon_root,
+        chord_loss, root, chroma, bass = self.chord_loss(c[1:], recon_root,
                                                          recon_chroma,
                                                          recon_bass)
         arg_loss = self.arg_loss(pred, positive, negative, temperature=1)

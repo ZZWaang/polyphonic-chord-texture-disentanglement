@@ -205,8 +205,8 @@ class ArrangementDataset(Dataset):
             for id in all_ids:
                 data = self.separated_data[id[0]][id[1]: id[1] + self.num_bar]
                 batch_data = self.__my_getitem__(data, shift)
-                # while len(batch_data['chord']) < 8:
-                #     batch_data['chord'] = np.zeros((8, 36), dtype=float)
+                while len(batch_data['chord']) < 8:
+                    batch_data['chord'] = np.zeros((8, 36), dtype=float)
                 all_batch_data.append(batch_data)
 
             concat_data = {}
