@@ -2,7 +2,7 @@ import argparse
 import warnings
 
 from latentAR import zTransformer, InfoNCELoss
-from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG
+from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG, DisentangleARGStageB
 from models.ptvae import RnnEncoder, TextureEncoder, PtvaeDecoder, RnnDecoder, NoteSummaryAttention, \
     PtvaeAttentionDecoder
 from data_utils.dataset_loaders import MusicDataLoaders, TrainingVAE
@@ -39,6 +39,7 @@ config.parallel = current_config.parallel if torch.cuda.is_available() and \
                                              torch.cuda.device_count() > 1 else False
 config.attention_emb = current_config.attention_emb
 
+# stage a polydis
 if config.training_stage == 1:
     chd_encoder = RnnEncoder(36, 1024, 256)
     voicing_encoder = TextureEncoder(256, 1024, 256)
@@ -54,6 +55,7 @@ if config.training_stage == 1:
     writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'kl_loss', 'kl_chd',
                     'kl_rhy', 'chord_loss', 'root_loss', 'chroma_loss', 'bass_loss']
 
+# stage b polydis
 elif config.training_stage == 2:
     voicing_encoder = TextureEncoder(256, 1024, 256)
     rhy_encoder = TextureEncoder(256, 1024, 256)
@@ -70,6 +72,7 @@ elif config.training_stage == 2:
     writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'kl_loss', 'kl_chd',
                     'kl_rhy', 'recon_loss_c', 'pl_c', 'dl_c']
 
+# stage a arg
 elif config.training_stage == 3:
     chd_encoder = RnnEncoder(36, 1024, 256)
     for p in chd_encoder.parameters():
@@ -88,12 +91,41 @@ elif config.training_stage == 3:
     arg_loss = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
     model = DisentangleARG(config.name, config.device, chd_encoder,
                            voicing_encoder, voicing_decoder, chd_decoder, arg_decoder, arg_loss)
-    model.load_state_dict(torch.load('result_2023-06-06_122449/models/disvae-nozoth_final.pt', map_location=config.device), strict=False)
+    model.load_state_dict(
+        torch.load('result_2023-06-06_122449/models/disvae-nozoth_final.pt', map_location=config.device), strict=False)
     data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_stage_a',
                                                 bs_train=config.batch_size, bs_val=config.batch_size,
                                                 portion=8, shift_low=-6, shift_high=5,
                                                 num_bar=2, contain_chord=True, full_song=True)
     writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'chord_loss', 'root_loss', 'chroma_loss', 'bass_loss', 'arg_loss']
+
+# stage b arg
+elif config.training_stage == 4:
+    voicing_encoder = TextureEncoder(256, 1024, 256)
+    rhy_encoder = TextureEncoder(256, 1024, 256)
+    voicing_decoder = PtvaeDecoder(note_embedding=None,
+                                   dec_dur_hid_size=64, z_size=256)
+    pt_decoder = PtvaeDecoder(note_embedding=None,
+                              dec_dur_hid_size=64, z_size=512)
+    for p in voicing_encoder.parameters():
+        p.requires_grad = False
+    for p in rhy_encoder.parameters():
+        p.requires_grad = False
+    for p in voicing_decoder.parameters():
+        p.requires_grad = False
+    for p in pt_decoder.parameters():
+        p.requires_grad = False
+    arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=12, dropout_p=0.1)
+    arg_loss = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
+    model = DisentangleARGStageB(config.name, config.device, voicing_encoder,
+                                 rhy_encoder, pt_decoder, voicing_decoder, arg_decoder, arg_loss)
+    model.load_state_dict(
+        torch.load('data/train_stage2_20221009.pt', map_location=config.device), strict=False)
+    data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_voicing',
+                                                bs_train=config.batch_size, bs_val=config.batch_size,
+                                                portion=8, shift_low=-6, shift_high=5,
+                                                num_bar=8, contain_chord=True, full_song=True)
+    writer_names = ['loss', 'recon_loss', 'pl', 'dl', 'recon_loss_c', 'pl_c', 'dl_c', 'arg_loss']
 else:
     raise Exception
 

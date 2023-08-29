@@ -11,7 +11,7 @@ from data_utils.score import PolyphonicMusic, NikoChordProgression
 from torch.utils.data import DataLoader
 from utils.utils import ext_nmat_to_pr, ext_nmat_to_mel_pr, \
     augment_pr, augment_mel_pr, pr_to_onehot_pr, piano_roll_to_target, \
-    target_to_3dtarget, expand_chord, onset_sus_pr2midi
+    target_to_3dtarget, expand_chord, onset_sus_pr2midi, get_valid_song_inds, get_whole_song_data
 
 DATA_PATH = os.path.join('../data', 'POP09-PIANOROLL-4-bin-quantization')
 INDEX_FILE_PATH = os.path.join('../data', 'index.xlsx')
@@ -413,10 +413,15 @@ def prepare_dataset(seed, bs_train, bs_val, portion=8, shift_low=-6, shift_high=
 
 
 def prepare_dataset_pop909_voicing(seed, bs_train, bs_val, portion=8, shift_low=-6, shift_high=5,
-                                   num_bar=2, random_train=True, random_val=False):
+                                   num_bar=2, random_train=True, random_val=False, full_song=False):
     # fns = collect_data_fns()
-    print('Loading Training Data...')
     import pickle
+    if full_song:
+        try:
+            return pickle.load(open('data/all_train_batch.pkl', 'rb')), pickle.load(open('data/all_val_batch.pkl', 'rb'))
+        except:
+            pass
+    print('Loading Training Data...')
     with open('data/ind.pkl', 'rb') as f:
         fns = pickle.load(f)
     np.random.seed(seed)
@@ -424,15 +429,25 @@ def prepare_dataset_pop909_voicing(seed, bs_train, bs_val, portion=8, shift_low=
     print('Constructing Training Set')
     train_set = wrap_dataset(fns, train_ids, shift_low, shift_high, num_bar=num_bar, prepare_voicing=True,
                              cache_name='pop909_voicing_train')
-    for i in range(len(train_set)):
-        print(train_set[i])
     print('Constructing Validation Set')
     val_set = wrap_dataset(fns, val_ids, 0, 0, num_bar=num_bar, prepare_voicing=True, cache_name='pop909_voicing_val')
     print(f'Done with {len(train_set)} training samples, {len(val_set)} validation samples')
     train_loader = DataLoader(train_set, bs_train, random_train)
     val_loader = DataLoader(val_set, bs_val, random_val)
+    if full_song:
+        inds, lengths = get_valid_song_inds(train_loader.dataset.valid_inds)
+        all_train_batch, all_val_batch = [], []
+        for i, (ind, length) in tqdm(enumerate(zip(inds, lengths))):
+            all_train_batch.append(get_whole_song_data(train_loader.dataset, ind, length, shift=0))
+        inds, lengths = get_valid_song_inds(val_loader.dataset.valid_inds)
+        for i, (ind, length) in enumerate(zip(inds, lengths)):
+            all_val_batch.append(get_whole_song_data(val_loader.dataset, ind, length, shift=0))
+        with open('data/all_train_batch.pkl', 'wb') as f:
+            pickle.dump(all_train_batch, f)
+        with open('data/all_val_batch.pkl', 'wb') as f:
+            pickle.dump(all_val_batch, f)
+        return all_train_batch, all_val_batch
     return train_loader, val_loader
-
 
 def prepare_dataset_niko(seed, bs_train, bs_val,
                          portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False):
@@ -477,5 +492,5 @@ def prepare_niko_like_dataset(seed, bs_train, bs_val,
 
 
 if __name__ == '__main__':
-    data = np.load('../data/pop909_stage_a.npz', allow_pickle=True)
-    print(data['pr'].shape)
+    music = init_music('../data/POP09-PIANOROLL-4-bin-quantization/293.npz', prepare_voicing=True)
+    music.prepare_data()

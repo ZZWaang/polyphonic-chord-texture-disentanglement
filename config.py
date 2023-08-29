@@ -9,6 +9,6 @@ beta = 0.1
 tf_rates = [(0.6, 0), (0.5, 0), (0.5, 0)]
 lr = 1e-4
 name = 'disvae-nozoth'
-training_stage = 3
+training_stage = 4
 
 attention_emb = 32

@@ -2,6 +2,7 @@ import numpy as np
 import pretty_midi
 import torch
 import pretty_midi as pyd
+from tqdm import tqdm
 
 from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG
 from models.ptvae import PtvaeDecoder
@@ -211,17 +212,28 @@ if __name__ == '__main__':
     #     recon.write(RECON_WRITE_PATH) if recon is not None else None
     # print("task finished")
 
-    for i in range(1, 6):
-        print(i)
-        PATH = f'experiments/20230628/{i}/'
-        recons = inference_stage_a_arg(PATH + 'p.mid', 'result_2023-06-06_122449/models/disvae-nozoth_final.pt')
-        for j, recon in enumerate(recons):
-            recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
+    # for i in tqdm(range(1, 15)):
+    #     PATH = f'experiments/20230726/{i}/'
+    #     recons = inference_stage_a_arg(PATH + 'p.mid', 'result_2023-07-25_173743/models/disvae-nozoth_final.pt')
+    #     for j, recon in enumerate(recons):
+    #         recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
 
-    # midi = generate_pop909_test_sample()
-    # midi.write('pop909.mid')
-    # pr2midi(extract_voicing_from_pr(midi2pr(midi), chord_length=16)).write('pop909v.mid')
-
-    # path = 'experiments/20230321/2'
-    # texture_midi = pretty_midi.PrettyMIDI(path + '/t.mid')
-    # extract_voicing(texture_midi).write(path + '/v.mid')
+    PATH = f'experiments/20221009/test6/'
+    CHORD_PATH = PATH + 'voicing.mid'
+    VOICING_PATH = PATH + 'voicing.mid'
+    TEXTURE_PATH = PATH + 'texture.mid'
+    STAGE1_CP = 'data/train_stage1_20220818.pt'
+    STAGE2_CP = 'data/train_stage2_20221009.pt'
+    VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
+    RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
+    RECON_WRITE_PATH = PATH + 'recon.mid'
+    recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
+        chord_provider=CHORD_PATH,
+        voicing_provider=VOICING_PATH,
+        texture_provider=TEXTURE_PATH,
+        stage1_checkpoint=STAGE1_CP,
+        stage2_checkpoint=STAGE2_CP,
+        with_voicing_recon=True)
+    recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
+    recon.write(RECON_WRITE_PATH) if recon is not None else None
+    recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None

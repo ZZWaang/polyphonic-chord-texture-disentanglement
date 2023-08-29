@@ -443,7 +443,8 @@ class DisentangleARG(PytorchModel):
         recon_root, recon_chroma, recon_bass = self.chd_decoder(pred[:, 0:256], False, tfr3, c[1:])
         return pitch_outs, dur_outs, recon_root, recon_chroma, recon_bass, pred, positive, negative
 
-    def loss_function(self, x, c, recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, pred, positive, negative,
+    def loss_function(self, x, c, recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, pred, positive,
+                      negative,
                       beta, weights, weighted_dur=False):
         recon_loss, pl, dl = self.decoder.recon_loss(x[1:], recon_pitch, recon_dur,
                                                      weights, weighted_dur)
@@ -606,3 +607,107 @@ class DisentangleARG(PytorchModel):
         model = DisentangleARG(name, device, chd_encoder,
                                rhy_encoder, pt_decoder, chd_decoder, arg_decoder, arg_loss_fun)
         return model
+
+
+class DisentangleARGStageB(PytorchModel):
+    def __init__(self, name, device, voicing_encoder, rhy_encoder, decoder,
+                 voicing_decoder, arg_decoder, arg_loss_fun):
+        super(DisentangleARGStageB, self).__init__(name, device)
+        self.voicing_encoder = voicing_encoder
+        self.rhy_encoder = rhy_encoder
+        self.decoder = decoder
+        self.voicing_decoder = voicing_decoder
+        self.arg_decoder = arg_decoder
+        self.arg_loss_fun = arg_loss_fun
+
+    def loss(self, x, c, pr_mat, pr_mat_c, voicing_multi_hot, tfr1=0., tfr2=0., tfr3=0.,
+             beta=0.1, weights=(1, 0.5)):
+        x = x.squeeze(0)
+        c = c.squeeze(0)
+        pr_mat = pr_mat.squeeze(0)
+        pr_mat_c = pr_mat_c.squeeze(0)
+        outputs = self.run(x, c, pr_mat, pr_mat_c, voicing_multi_hot, tfr1, tfr2, tfr3)
+        loss = self.loss_function(x, c, *outputs, beta, weights)
+        return loss
+
+    def inference(self, pr_mat, c, sample, save_z=None):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.voicing_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            if save_z:
+                torch.save(dec_z, 'zs/s2/{}.pt'.format(save_z))
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+        return est_x
+
+    def inference_with_chord_decode(self, pr_mat, c, vm, sample, save_z=None):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.voicing_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            if save_z:
+                torch.save(dec_z, 'zs/s2/{}.pt'.format(save_z))
+            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+                                                None, 0., 0.)
+            pitch_outs_c, dur_outs_c = self.voicing_decoder(z_chd, True, None,
+                                                            None, 0., 0.)
+            est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+            est_x_c, _, _ = self.voicing_decoder.output_to_numpy(pitch_outs_c, dur_outs_c)
+        return est_x, est_x_c
+
+    def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
+                      dist_rhy, recon_pitch_c, recon_dur_c, pred, positive, negative,
+                      beta, weights, weighted_dur=False):
+        recon_loss, pl, dl = self.decoder.recon_loss(x[1:], recon_pitch, recon_dur,
+                                                     weights, weighted_dur)
+        recon_loss_c, pl_c, dl_c = self.voicing_decoder.recon_loss(c[1:], recon_pitch_c, recon_dur_c, weights, weighted_dur)
+        arg_loss = self.arg_loss(pred, positive, negative, temperature=1)
+        loss = recon_loss + recon_loss_c + arg_loss
+        return loss, recon_loss, pl, dl, recon_loss_c, pl_c, dl_c, arg_loss
+
+    def arg_loss(self, pred, positive, negative, temperature=1):
+        return self.arg_loss_fun(pred, positive, negative, temperature)
+
+    @staticmethod
+    def init_model(device=None, voicing_size=256, txt_size=256, num_channel=10):
+        name = 'disvae2'
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available()
+                                  else 'cpu')
+        voicing_encoder = TextureEncoder(256, 1024, 256)
+        rhy_encoder = TextureEncoder(256, 1024, 256)
+        voicing_decoder = PtvaeDecoder(note_embedding=None,
+                                       dec_dur_hid_size=64, z_size=256)
+        pt_decoder = PtvaeDecoder(note_embedding=None,
+                                  dec_dur_hid_size=64, z_size=512)
+        arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=12, dropout_p=0.1)
+        arg_loss = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
+        model = DisentangleARGStageB(name, device, voicing_encoder,
+                                     rhy_encoder, pt_decoder, voicing_decoder, arg_decoder, arg_loss)
+        return model
+
+    def run(self, x, c, pr_mat, pr_mat_c, voicing_multi_hot, tfr1, tfr2, tfr3, confuse=True):
+
+        embedded_x, lengths = self.decoder.emb_x(x[1:])
+        embedded_c, lengths_c = self.voicing_decoder.emb_x(c[1:])
+        dist_voicing = self.voicing_encoder(pr_mat_c)
+        dist_rhy = self.rhy_encoder(pr_mat)
+        z_voicing, z_rhy = get_zs_from_dists([dist_voicing, dist_rhy], False)
+        dec_z = torch.cat([z_voicing, z_rhy], dim=-1).unsqueeze(0)
+        y_input = dec_z[:, :-1]
+        y_expected = dec_z[:, 1:]
+        pred = self.arg_decoder(y_input)
+        pred = pred[0]
+        positive = torch.permute(y_expected, (1, 0, 2))
+        negative = torch.concat([torch.unsqueeze(torch.cat((positive[: i, 0], positive[i + 1:, 0]), dim=0), dim=0) \
+                                 for i in range(positive.shape[0])], dim=0)
+
+        pitch_outs, dur_outs = self.decoder(pred, False, embedded_x, lengths, tfr1, tfr2)
+        pitch_outs_c, dur_outs_c = self.voicing_decoder(pred[:, 0:256], False, embedded_c, lengths_c, tfr1, tfr2)
+        return pitch_outs, dur_outs, dist_voicing, dist_rhy, pitch_outs_c, dur_outs_c, pred, positive, negative

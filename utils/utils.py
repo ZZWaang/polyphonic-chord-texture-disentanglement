@@ -7,6 +7,7 @@ import os
 import random
 from typing import Sequence
 import numpy as np
+import torch
 
 
 def bpm_to_rate(bpm):
@@ -350,10 +351,10 @@ def onset_sus_pr2midi(pr):
         for pitch in range(128):
             if pr[time][pitch] == 2:
                 sus = 1
-                if time+sus < len(pr):
-                    while pr[time+sus][pitch] == 1:
+                if time + sus < len(pr):
+                    while pr[time + sus][pitch] == 1:
                         sus += 1
-                        if time+sus >= len(pr):
+                        if time + sus >= len(pr):
                             break
                 if i >= 0:
                     all_notes.append(
@@ -394,7 +395,7 @@ def midi2pr(track, down_sample=1):
     max_end = int(max(notes, key=lambda x: x[1])[1]) // down_sample
     pr = np.zeros((max_end, 128))
     for note in notes:
-        duration = math.ceil((note[1]-note[0])/down_sample)
+        duration = math.ceil((note[1] - note[0]) / down_sample)
         pr[int(note[0]) // down_sample, note[2]] = duration
     return pr
 
@@ -563,6 +564,75 @@ def generate_pop909_test_sample():
         file_path = os.path.join(folder_path, random.choice(list(os.listdir(folder_path))))
     data = np.load(file_path)['piano']
     return pr2midi(data)
+
+
+def get_whole_song_data(dataset, start_ind, length, shift=0):
+    mels = []
+    prs = []
+    pr_mats = []
+    accs = []
+    chords = []
+    dt_xs = []
+    pr_mats_voicing = []
+    accs_voicing = []
+    voicing_multi_hot = []
+    for i in range(start_ind + shift, start_ind + length):
+        if (i - start_ind - shift) % 2 != 0:
+            continue
+        data_sample = dataset[i]
+        mels.append(data_sample['mel_segments'])
+        prs.append(data_sample['prs'])
+        pr_mats.append(data_sample['pr_mats'])
+        accs.append(data_sample['p_grids'])
+        chords.append(data_sample['chord'])
+        dt_xs.append(data_sample['dt_x'])
+        voicing_multi_hot.append(data_sample['voicing_multi_hot'])
+        pr_mats_voicing.append(data_sample['pr_mats_voicing'])
+        accs_voicing.append(data_sample['p_grids_voicing'])
+    mels = torch.from_numpy(np.array(mels))
+    prs = torch.from_numpy(np.array(prs))
+    pr_mats = torch.from_numpy(np.array(pr_mats))
+    accs = torch.from_numpy(np.array(accs))
+    chords = torch.from_numpy(np.array(chords))
+    dt_xs = torch.from_numpy(np.array(dt_xs))
+    voicing_multi_hot = torch.from_numpy(np.array(voicing_multi_hot))
+    pr_mats_voicing = torch.from_numpy(np.array(pr_mats_voicing))
+    accs_voicing = torch.from_numpy(np.array(accs_voicing))
+    return {'mel_segments': mels,
+            'prs': prs,
+            'pr_mats': pr_mats,
+            'p_grids': accs,
+            'pr_mats_voicing': pr_mats_voicing,
+            'p_grids_voicing': accs_voicing,
+            'voicing_multi_hot': voicing_multi_hot,
+            'dt_x': np.array([])}
+
+
+def get_valid_song_inds(valid_inds, min_bars=16):
+    """Inputs 1-d array of inds; returns the start inds of consecutive
+    sub-arrays, and length of the array"""
+    inds = []
+    lengths = []
+    length = 0
+    for vi, i in enumerate(valid_inds):
+        if length == 0:
+            start_ind = i
+            record_ind = vi
+            length = 1
+        else:
+            if i - start_ind != length:
+                if length + 3 >= min_bars:
+                    inds.append(record_ind)
+                    lengths.append(length)
+                start_ind = i
+                record_ind = vi
+                length = 1
+            else:
+                length += 1
+        if i == valid_inds[-1] and length + 3 >= min_bars:
+            inds.append(record_ind)
+            lengths.append(length)
+    return inds, lengths
 
 
 if __name__ == '__main__':
