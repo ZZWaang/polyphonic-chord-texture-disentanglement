@@ -4,7 +4,7 @@ import torch
 import pretty_midi as pyd
 from tqdm import tqdm
 
-from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG
+from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG, DisentangleARGStageB
 from models.ptvae import PtvaeDecoder
 from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
     chord_stretch, pr_stretch, generate_pop909_test_sample, extract_voicing_from_pr, pr2midi, extract_voicing
@@ -174,6 +174,28 @@ def inference_stage_a_arg(prompt, checkpoint):
         all_regen.append(midi_re_gen)
     return all_regen
 
+def inference_stage_b_arg(prompt, checkpoint):
+    midi = pyd.PrettyMIDI(prompt)
+    voicing_midi = extract_voicing(midi)
+    voicing = midi2pr(voicing_midi)
+    acc = midi2pr(midi)
+    acc = melody_split(acc, window_size=32, hop_size=32, vector_size=128)
+    voicing = melody_split(voicing, window_size=32, hop_size=32, vector_size=128)
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    model = DisentangleARGStageB.init_model(device).to(device)
+    checkpoint = torch.load(checkpoint, map_location=device)
+    model.load_state_dict(checkpoint, strict=False)
+    acc = torch.from_numpy(acc).float().to(device)
+    voicing = torch.from_numpy(voicing).float().to(device)
+    all_regen, all_regen_v = [], []
+    all_est_x, all_est_x_voicing = model.inference_with_chord_decode(acc, voicing, sample=False)
+    print(all_est_x)
+    for i in range(len(all_est_x)):
+        all_regen.append(accompaniment_generation(all_est_x[i], 120))
+        all_regen_v.append(accompaniment_generation(all_est_x_voicing[i], 120))
+
+    return all_regen, all_regen_v
+
 
 if __name__ == '__main__':
     # for i in range(1, 3):
@@ -218,22 +240,10 @@ if __name__ == '__main__':
     #     for j, recon in enumerate(recons):
     #         recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
 
-    PATH = f'experiments/20221009/test6/'
-    CHORD_PATH = PATH + 'voicing.mid'
-    VOICING_PATH = PATH + 'voicing.mid'
-    TEXTURE_PATH = PATH + 'texture.mid'
-    STAGE1_CP = 'data/train_stage1_20220818.pt'
-    STAGE2_CP = 'data/train_stage2_20221009.pt'
-    VOICING_WRITE_PATH = PATH + 'recon_voicing.mid'
-    RECON_VOICING_WRITE_PATH = PATH + 'recon_recon_voicing.mid'
-    RECON_WRITE_PATH = PATH + 'recon.mid'
-    recon, recon_voicing, recon_recon_voicing = inference_chord_voicing_texture_disentanglement(
-        chord_provider=CHORD_PATH,
-        voicing_provider=VOICING_PATH,
-        texture_provider=TEXTURE_PATH,
-        stage1_checkpoint=STAGE1_CP,
-        stage2_checkpoint=STAGE2_CP,
-        with_voicing_recon=True)
-    recon_voicing.write(VOICING_WRITE_PATH) if recon_voicing is not None else None
-    recon.write(RECON_WRITE_PATH) if recon is not None else None
-    recon_recon_voicing.write(RECON_VOICING_WRITE_PATH) if recon_recon_voicing is not None else None
+    for i in range(3):
+        PATH = f'experiments/20230829/{i}/'
+        recons, recons_v = inference_stage_b_arg(PATH + 'p.mid', 'result_2023-08-29_031802/models/disvae-nozoth_final.pt')
+        for j, recon in enumerate(recons):
+            recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
+        for j, recon in enumerate(recons_v):
+            recon.write(PATH + f'recon_v_{j}.mid') if recon is not None else None

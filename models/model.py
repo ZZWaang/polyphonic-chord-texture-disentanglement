@@ -644,22 +644,38 @@ class DisentangleARGStageB(PytorchModel):
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
         return est_x
 
-    def inference_with_chord_decode(self, pr_mat, c, vm, sample, save_z=None):
+    def inference_with_chord_decode(self, pr_mat, c, sample):
         self.eval()
         with torch.no_grad():
             dist_chd = self.voicing_encoder(c)
             dist_rhy = self.rhy_encoder(pr_mat)
             z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
             dec_z = torch.cat([z_chd, z_rhy], dim=-1)
-            if save_z:
-                torch.save(dec_z, 'zs/s2/{}.pt'.format(save_z))
-            pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+
+            pred = self.arg_decoder(dec_z)[0]
+            all_est_x, all_est_c = [], []
+            pitch_outs, dur_outs = self.decoder(pred, True, None,
                                                 None, 0., 0.)
-            pitch_outs_c, dur_outs_c = self.voicing_decoder(z_chd, True, None,
+            pitch_outs_c, dur_outs_c = self.voicing_decoder(pred[:, 0:256], True, None,
                                                             None, 0., 0.)
             est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
             est_x_c, _, _ = self.voicing_decoder.output_to_numpy(pitch_outs_c, dur_outs_c)
-        return est_x, est_x_c
+            all_est_x.append(est_x)
+            all_est_c.append(est_x_c)
+
+            for i in range(4):
+                dec_z = torch.cat([dec_z.squeeze(0), pred[-1].unsqueeze(0)], dim=0)
+                pred = self.arg_decoder(dec_z.unsqueeze(0))[0]
+                pitch_outs, dur_outs = self.decoder(pred[-1].unsqueeze(0), True, None,
+                                                    None, 0., 0.)
+                pitch_outs_c, dur_outs_c = self.voicing_decoder(pred[-1, 0:256].unsqueeze(0), True, None,
+                                                                None, 0., 0.)
+                est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+                est_x_c, _, _ = self.voicing_decoder.output_to_numpy(pitch_outs_c, dur_outs_c)
+                all_est_x.append(est_x)
+                all_est_c.append(est_x_c)
+
+        return all_est_x, all_est_c
 
     def loss_function(self, x, c, recon_pitch, recon_dur, dist_chd,
                       dist_rhy, recon_pitch_c, recon_dur_c, pred, positive, negative,
