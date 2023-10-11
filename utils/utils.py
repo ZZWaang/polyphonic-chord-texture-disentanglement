@@ -103,7 +103,7 @@ def piano_roll_to_target(pr):
     # Initialize a matrix to store the duration of a note on the (32, 128) grid
     pr_matrix = np.zeros((32, 128))
 
-    for i in range(31, -1, -1):
+    for i in range(32-1, -1, -1):
         # At each iteration
         # 1. Assure that the second layer accumulates the note duration
         # 2. collect the onset notes in time step i, and mark it on the matrix.
@@ -247,17 +247,6 @@ def accompany_matrix2data(pr_matrix, tempo=120, start_time=0.0, get_list=False):
         acc = pyd.Instrument(program=pyd.instrument_name_to_program('Acoustic Grand Piano'))
         acc.notes = notes
         return acc
-
-
-def expand_chord(chord, shift, relative=False):
-    root = (chord[0] + shift) % 12
-    chroma = np.roll(chord[1: 13], shift)
-    bass = (chord[13] + shift) % 12
-    root_onehot = np.zeros(12)
-    root_onehot[int(root)] = 1
-    bass_onehot = np.zeros(12)
-    bass_onehot[int(bass)] = 1
-    return np.concatenate([root_onehot, chroma, bass_onehot])
 
 
 def chord_data2matrix(chord_track, downbeats, resolution='beat', chord_expand=True, tolerance=0.125):
@@ -580,32 +569,35 @@ def get_whole_song_data(dataset, start_ind, length, shift=0):
         if (i - start_ind - shift) % 2 != 0:
             continue
         data_sample = dataset[i]
-        mels.append(data_sample['mel_segments'])
-        prs.append(data_sample['prs'])
+        # mels.append(data_sample['mel_segments'])
+        # prs.append(data_sample['prs'])
         pr_mats.append(data_sample['pr_mats'])
         accs.append(data_sample['p_grids'])
         chords.append(data_sample['chord'])
-        dt_xs.append(data_sample['dt_x'])
-        voicing_multi_hot.append(data_sample['voicing_multi_hot'])
+        # dt_xs.append(data_sample['dt_x'])
+        # voicing_multi_hot.append(data_sample['voicing_multi_hot'])
         pr_mats_voicing.append(data_sample['pr_mats_voicing'])
         accs_voicing.append(data_sample['p_grids_voicing'])
-    mels = torch.from_numpy(np.array(mels))
-    prs = torch.from_numpy(np.array(prs))
+    # mels = torch.from_numpy(np.array(mels))
+    # prs = torch.from_numpy(np.array(prs))
     pr_mats = torch.from_numpy(np.array(pr_mats))
     accs = torch.from_numpy(np.array(accs))
     chords = torch.from_numpy(np.array(chords))
-    dt_xs = torch.from_numpy(np.array(dt_xs))
-    voicing_multi_hot = torch.from_numpy(np.array(voicing_multi_hot))
+    # dt_xs = torch.from_numpy(np.array(dt_xs))
+    # voicing_multi_hot = torch.from_numpy(np.array(voicing_multi_hot))
     pr_mats_voicing = torch.from_numpy(np.array(pr_mats_voicing))
     accs_voicing = torch.from_numpy(np.array(accs_voicing))
-    return {'mel_segments': mels,
-            'prs': prs,
+    return {
+            # 'mel_segments': mels,
+            # 'prs': prs,
             'pr_mats': pr_mats,
             'p_grids': accs,
             'pr_mats_voicing': pr_mats_voicing,
             'p_grids_voicing': accs_voicing,
-            'voicing_multi_hot': voicing_multi_hot,
-            'dt_x': np.array([])}
+            'chord': chords,
+            # 'voicing_multi_hot': voicing_multi_hot,
+            # 'dt_x': np.array([])
+    }
 
 
 def get_valid_song_inds(valid_inds, min_bars=16):

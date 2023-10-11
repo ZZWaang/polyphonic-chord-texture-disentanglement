@@ -1,4 +1,5 @@
 import numpy as np
+import pretty_midi
 import torch
 
 from data_utils.dataset import prepare_dataset_niko, prepare_dataset, prepare_dataset_pop909_voicing, \
@@ -24,24 +25,24 @@ class MusicDataLoaders(DataLoaders):
                                          shift_high, num_bar, random_train, random_val)
         elif dataset_name == 'pop909_stage_a':
             train, val = prepare_dataset_pop909_stage_a(seed, bs_train, bs_val, portion, shift_low,
-                                              shift_high, num_bar, random_train, random_val, full_song)
+                                                        shift_high, num_bar, random_train, random_val, full_song)
         else:
             raise Exception
         return MusicDataLoaders(train, val, bs_train, bs_val)
 
 
-class TrainingVAE(TrainingInterface):
+def save_midi(pr, name):
+    midi = pretty_midi.PrettyMIDI()
+    track = pretty_midi.Instrument(program=0)
+    for i in range(32):
+        for j in range(128):
+            if pr[i][j] != 0:
+                track.notes.append(pretty_midi.Note(start=i * 0.125, end=(i + 1) * 0.125, pitch=j, velocity=60))
+    midi.instruments.append(track)
+    midi.write('{}.mid'.format(name))
 
-    def save_midi(self, pr, name):
-        import pretty_midi
-        midi = pretty_midi.PrettyMIDI()
-        track = pretty_midi.Instrument(program=0)
-        for i in range(32):
-            for j in range(128):
-                if pr[i][j] != 0:
-                    track.notes.append(pretty_midi.Note(start=i * 0.125, end=(i + 1) * 0.125, pitch=j, velocity=60))
-        midi.instruments.append(track)
-        midi.write('{}.mid'.format(name))
+
+class TrainingVAE(TrainingInterface):
 
     def _batch_to_inputs(self, batch):
         #
@@ -59,9 +60,17 @@ class TrainingVAE(TrainingInterface):
                    batch['pr_mats'].to(self.device).float(), \
                    torch.tensor(batch['dt_x']).to(self.device).float()
         else:
-            return batch['p_grids'].to(self.device).long(), \
-                   batch['p_grids_voicing'].to(self.device).long(), \
-                   batch['pr_mats'].to(self.device).float(), \
-                   batch['pr_mats_voicing'].to(self.device).float(), \
-                   batch['voicing_multi_hot'].to(self.device).float(), \
-                   torch.tensor(batch['dt_x']).to(self.device).float()
+            if 'voicing_multi_hot' not in batch:
+                return batch['p_grids_voicing'].to(self.device).long(), \
+                       batch['chord'].to(self.device).float(), \
+                       batch['pr_mats_voicing'].to(self.device).float(), \
+                       batch['p_grids'].to(self.device).long(), \
+                       batch['pr_mats'].to(self.device).float(), \
+                       torch.tensor(batch['dt_x']).to(self.device).float()
+            else:
+                return batch['p_grids'].to(self.device).long(), \
+                       batch['p_grids_voicing'].to(self.device).long(), \
+                       batch['pr_mats'].to(self.device).float(), \
+                       batch['pr_mats_voicing'].to(self.device).float(), \
+                       batch['voicing_multi_hot'].to(self.device).float(), \
+                       torch.tensor(batch['dt_x']).to(self.device).float()
