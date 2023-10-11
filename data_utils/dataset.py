@@ -226,6 +226,8 @@ class ArrangementDataset(Dataset):
                 else:
                     cursor += 1
             all_batch_data = []
+            if len(all_ids) == 0:
+                return self.__getitem__(id + 1)
             while len(all_ids) < 3:
                 all_ids.append(all_ids[-1])
             for id in all_ids:
