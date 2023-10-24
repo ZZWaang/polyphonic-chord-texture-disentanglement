@@ -317,7 +317,7 @@ class NikoChordProgression:
                     end = current_time + self.pr[current_time][pitch]
                     vel = 80
                     track.append([start // 4, start % 4, 4, end // 4, end % 4, 4, pitch, vel])
-        self.track = np.array(track)
+        self.track = np.array(track, dtype=int)
 
     def _break_track_to_bars(self, db_pos):
         # return a list of bars
@@ -386,13 +386,13 @@ class NikoChordProgression:
                 continue
             indicator[i] = 1
 
-        new_data_track = []
-        new_indicator = []
-        for i in range(len(data_track)):
-            if len(data_track[i][1]) != 0:
-                new_data_track.append(data_track[i])
-                new_indicator.append(indicator[i])
-        data_track = new_data_track
-        indicator = new_indicator
+        # new_data_track = []
+        # new_indicator = []
+        # for i in range(len(data_track)):
+        #     if len(data_track[i][1]) != 0:
+        #         new_data_track.append(data_track[i])
+        #         new_indicator.append(indicator[i])
+        # data_track = new_data_track
+        # indicator = new_indicator
 
         return data_track, indicator, db_pos

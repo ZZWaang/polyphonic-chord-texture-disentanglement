@@ -23,10 +23,9 @@ class ArrangementDataset(Dataset):
 
     def __init__(self, data, indicator, shift_low, shift_high, num_bar=8,
                  ts=4, contain_chord=False, contain_voicing=False, full_song=False):
-        print(full_song)
         super(ArrangementDataset, self).__init__()
         self.separated_data = data
-        self.separated_data_index = self._get_separated_data_index()
+        self.separated_data_index = self._get_separated_data_index() if full_song else None
         self.data = np.concatenate(data)
         self.separated_indicator = indicator
         self.indicator = np.concatenate(indicator)
@@ -488,7 +487,7 @@ def prepare_dataset_pop909_stage_a(seed, bs_train, bs_val,
                                      random_train=random_train,
                                      random_val=random_val,
                                      full_song=full_song,
-                                     name='pop909_stage_a.npz')
+                                     name='pop909_stage_a.npz' if full_song else 'poly-dis-niko_new.npz')
 
 
 def prepare_niko_like_dataset(seed, bs_train, bs_val,
