@@ -776,11 +776,46 @@ class DisentangleARGFull(PytorchModel):
         print(stage_a_x.shape, stage_a_c.shape, stage_a_pr_mat.shape, stage_b_x.shape, stage_b_pr_mat.shape)
         return stage_a_x, stage_a_c, stage_a_pr_mat, stage_b_x, stage_b_pr_mat
 
-    def inference(self, pr_mat, c, sample, save_z=None):
-        pass
+    def inference_stage_a(self, c, pr_mat, bars=4):
+        self.eval()
+        with torch.no_grad():
+            dist_chd = self.stage_a_chd_encoder(c)
+            dist_rhy = self.stage_a_rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], False)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1).unsqueeze(0)
+            pred = self.stage_a_arg_decoder(dec_z)[0]
+            pitch_outs, dur_outs = self.stage_a_decoder(pred, True, None, None, 0., 0.)
+            est_x, _, _ = self.stage_a_decoder.output_to_numpy(pitch_outs, dur_outs)
+            for i in range(bars):
+                dec_z = torch.cat([dec_z.squeeze(0), pred[-1].unsqueeze(0)], dim=0)
+                pred = self.stage_a_arg_decoder(dec_z.unsqueeze(0))[0]
+                pitch_outs, dur_outs = self.stage_a_decoder(pred, True, None, None, 0., 0.)
+                est_x, _, _ = self.stage_a_decoder.output_to_numpy(pitch_outs, dur_outs)
+            return est_x
 
-    def inference_with_chord_decode(self, pr_mat, c, sample):
-        pass
+    def inference_stage_b(self, pr_mat_c, pr_mat):
+        self.eval()
+        print(pr_mat_c.shape, pr_mat.shape)
+        with torch.no_grad():
+            dist_chd = self.stage_b_voicing_encoder(pr_mat_c)
+            dist_rhy = self.stage_b_rhy_encoder(pr_mat)
+            if len(pr_mat_c) == len(pr_mat):
+                z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], False)
+                dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+                pitch_outs, dur_outs = self.stage_b_decoder(dec_z, True, None, None, 0., 0.)
+                est_x, _, _ = self.stage_a_decoder.output_to_numpy(pitch_outs, dur_outs)
+                return est_x
+            else:
+                z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], False)
+                z_chd = z_chd[:len(z_rhy)]
+                dec_z = torch.cat([z_chd, z_rhy], dim=-1).unsqueeze(0)
+                pred = self.stage_b_arg_decoder(dec_z)[0]
+                pitch_outs, dur_outs = self.stage_b_decoder(pred[-1].unsqueeze(0), True, None, None, 0., 0.)
+                est_x, _, _ = self.stage_b_decoder.output_to_numpy(pitch_outs, dur_outs)
+                pr, _ = self.stage_b_decoder.grid_to_pr_and_notes(grid=est_x[0], bpm=120, start=0)
+                pr = torch.from_numpy(pr).float().to(torch.device('cuda')).unsqueeze(0)
+                pr_mat = torch.cat((pr_mat, pr))
+                return self.inference_stage_b(pr_mat_c, pr_mat)
 
     def loss_function(self, stage_a_x, stage_a_c, stage_b_x,
                       stage_a_recon_root, stage_a_recon_chroma, stage_a_recon_bass,
@@ -838,7 +873,7 @@ class DisentangleARGFull(PytorchModel):
         stage_a_pt_decoder = PtvaeDecoder(note_embedding=None,
                                           dec_dur_hid_size=64,
                                           z_size=chd_size + txt_size)
-        stage_a_arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=12, dropout_p=0.1)
+        stage_a_arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=6, dropout_p=0.1)
         stage_a_arg_loss_fun = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
 
         stage_b_voicing_encoder = TextureEncoder(256, 1024, 256)
@@ -847,7 +882,7 @@ class DisentangleARGFull(PytorchModel):
                                                dec_dur_hid_size=64, z_size=256)
         stage_b_pt_decoder = PtvaeDecoder(note_embedding=None,
                                           dec_dur_hid_size=64, z_size=512)
-        stage_b_arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=12, dropout_p=0.1)
+        stage_b_arg_decoder = zTransformer(dim_model=512, num_heads=8, num_decoder_layers=6, dropout_p=0.1)
         stage_b_arg_loss = InfoNCELoss(input_dim=512, sample_dim=512, skip_projection=False)
 
         model = DisentangleARGFull(name, device, stage_a_chd_encoder, stage_a_rhy_encoder, stage_a_chd_decoder,

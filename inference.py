@@ -2,13 +2,14 @@ import numpy as np
 import pretty_midi
 import torch
 import pretty_midi as pyd
-from tqdm import tqdm
 
-from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG, DisentangleARGStageB
+from models.model import DisentangleVAE, DisentangleVoicingTextureVAE, DisentangleARG, DisentangleARGStageB, \
+    DisentangleARGFull
 from models.ptvae import PtvaeDecoder
 from utils.utils import chord_data2matrix, midi2pr, melody_split, chord_split, accompany_matrix2data, \
     chord_stretch, pr_stretch, generate_pop909_test_sample, extract_voicing_from_pr, pr2midi, extract_voicing
 from utils.utils import extract_voicing
+
 np.set_printoptions(threshold=10000)
 
 
@@ -153,6 +154,7 @@ def inference_chord_voicing_texture_disentanglement(chord_provider: str,
             recon = inference_stage2(recon_voicing, texture, checkpoint=stage2_checkpoint)
             return recon, recon_chord_voicing_midi
 
+
 def inference_stage_a_arg(prompt, checkpoint):
     midi = pyd.PrettyMIDI(prompt)
     c = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quarter')
@@ -173,6 +175,7 @@ def inference_stage_a_arg(prompt, checkpoint):
         midi_re_gen = accompaniment_generation(est_x, 30)
         all_regen.append(midi_re_gen)
     return all_regen
+
 
 def inference_stage_b_arg(prompt, checkpoint):
     midi = pyd.PrettyMIDI(prompt)
@@ -195,6 +198,60 @@ def inference_stage_b_arg(prompt, checkpoint):
         all_regen_v.append(accompaniment_generation(all_est_x_voicing[i], 120))
 
     return all_regen, all_regen_v
+
+
+def inference_arg(prompt, checkpoint):
+    midi = pyd.PrettyMIDI(prompt)
+    c = chord_data2matrix(midi.instruments[0], midi.get_downbeats(), 'quarter')
+    c = c[::16, :]
+    v = midi2pr(extract_voicing(midi).instruments[0], down_sample=4)
+    t = midi2pr(midi.instruments[0])
+    acc_ensemble = melody_split(v, window_size=32, hop_size=32, vector_size=128)
+    chord_table = chord_split(c, 8, 8)
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+    model = DisentangleARGFull.init_model(device).to(device)
+    checkpoint = torch.load(checkpoint, map_location=device)
+    model.load_state_dict(checkpoint, strict=True)
+    pr_matrix = torch.from_numpy(acc_ensemble).float().to(device)
+    gt_chord = torch.from_numpy(chord_table).float().to(device)
+    all_est_x = model.inference_stage_a(gt_chord, pr_matrix)
+    pt_decoder = PtvaeDecoder(note_embedding=None, dec_dur_hid_size=64, z_size=512)
+    start = 0
+    chord_gen = pyd.PrettyMIDI(initial_tempo=120)
+    texture_track = pyd.Instrument(program=pyd.instrument_name_to_program('Acoustic Grand Piano'))
+    all_chord_pr = []
+    for i in all_est_x:
+        pr, _ = pt_decoder.grid_to_pr_and_notes(grid=i, bpm=30, start=0)
+        texture_notes = accompany_matrix2data(pr_matrix=pr, tempo=30, start_time=start, get_list=True)
+        texture_track.notes += texture_notes
+        start += 60 / 30 * 8
+
+        stretched_pr = np.zeros((4, 32, 128))
+        for i in range(32):
+            for j in range(128):
+                stretched_pr[i * 4 // 32, i * 4 % 32, j] = pr[i, j] * 4
+        all_chord_pr.append(stretched_pr)
+    chord_gen.instruments.append(texture_track)
+
+    all_chord_pr = np.array(all_chord_pr)
+    all_chord_pr = torch.from_numpy(all_chord_pr).float().to(device)
+    all_chord_pr = all_chord_pr.reshape(-1, 32, 128)
+    print(t.shape)
+    texture_pr = torch.from_numpy(t).float().to(device).reshape(4, 32, 128)
+    print(all_chord_pr.shape, texture_pr.shape)
+    all_est_x = model.inference_stage_b(all_chord_pr, texture_pr)
+    start = 0
+    midi_gen = pyd.PrettyMIDI(initial_tempo=120)
+    texture_track = pyd.Instrument(program=pyd.instrument_name_to_program('Acoustic Grand Piano'))
+    for i in all_est_x:
+        print(i.shape)
+        pr, _ = pt_decoder.grid_to_pr_and_notes(grid=i, bpm=120, start=0)
+        texture_notes = accompany_matrix2data(pr_matrix=pr, tempo=120, start_time=start, get_list=True)
+        texture_track.notes += texture_notes
+        start += 60 / 120 * 8
+    midi_gen.instruments.append(texture_track)
+    return chord_gen, midi_gen
 
 
 if __name__ == '__main__':
@@ -240,10 +297,16 @@ if __name__ == '__main__':
     #     for j, recon in enumerate(recons):
     #         recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
 
-    for i in range(3):
-        PATH = f'experiments/20230829/{i}/'
-        recons, recons_v = inference_stage_b_arg(PATH + 'p.mid', 'result_2023-08-29_031802/models/disvae-nozoth_final.pt')
-        for j, recon in enumerate(recons):
-            recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
-        for j, recon in enumerate(recons_v):
-            recon.write(PATH + f'recon_v_{j}.mid') if recon is not None else None
+    # for i in range(3):
+    #     PATH = f'experiments/20230829/{i}/'
+    #     recons, recons_v = inference_stage_b_arg(PATH + 'p.mid', 'result_2023-08-29_031802/models/disvae-nozoth_final.pt')
+    #     for j, recon in enumerate(recons):
+    #         recon.write(PATH + f'recon_{j}.mid') if recon is not None else None
+    #     for j, recon in enumerate(recons_v):
+    #         recon.write(PATH + f'recon_v_{j}.mid') if recon is not None else None
+
+    for i in range(1, 2):
+        PATH = f'experiments/20231011/{i}/'
+        chord_gen, midi_gen = inference_arg(PATH + 'p.mid', 'data/train_stage_ab_arg.pt')
+        chord_gen.write(PATH + 'chord_gen.mid')
+        midi_gen.write(PATH + 'midi_gen.mid')
