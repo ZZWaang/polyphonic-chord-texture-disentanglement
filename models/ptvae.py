@@ -567,10 +567,11 @@ class PtvaeDecoder(nn.Module):
                     break
                 pitch = note[0] + self.min_pitch
                 dur = int(''.join([str(_) for _ in note[1:]]), 2) + 1
-                pr[t, pitch] = min(dur, 32 - t)
-                notes.append(
-                    pretty_midi.Note(100, int(pitch), start + t * alpha,
-                                     start + (t + dur) * alpha))
+                if pitch < 128:
+                    pr[t, pitch] = min(dur, 32 - t)
+                    notes.append(
+                        pretty_midi.Note(100, int(pitch), start + t * alpha,
+                                         start + (t + dur) * alpha))
         return pr, notes
 
 

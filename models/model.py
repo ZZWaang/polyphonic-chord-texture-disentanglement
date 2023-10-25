@@ -773,7 +773,6 @@ class DisentangleARGFull(PytorchModel):
         stage_b_x = stage_b_x.reshape(shape[0] * shape[1], shape[2], shape[3], shape[4])
         shape = stage_b_pr_mat.shape
         stage_b_pr_mat = stage_b_pr_mat.reshape(shape[0] * shape[1], shape[2], shape[3])
-        print(stage_a_x.shape, stage_a_c.shape, stage_a_pr_mat.shape, stage_b_x.shape, stage_b_pr_mat.shape)
         return stage_a_x, stage_a_c, stage_a_pr_mat, stage_b_x, stage_b_pr_mat
 
     def inference_stage_a(self, c, pr_mat, bars=4):

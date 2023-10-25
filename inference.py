@@ -305,8 +305,12 @@ if __name__ == '__main__':
     #     for j, recon in enumerate(recons_v):
     #         recon.write(PATH + f'recon_v_{j}.mid') if recon is not None else None
 
-    for i in range(1, 2):
-        PATH = f'experiments/20231011/{i}/'
-        chord_gen, midi_gen = inference_arg(PATH + 'p.mid', 'data/train_stage_ab_arg.pt')
-        chord_gen.write(PATH + 'chord_gen.mid')
-        midi_gen.write(PATH + 'midi_gen.mid')
+    # for i in range(1, 2):
+    #     PATH = f'experiments/20231011/{i}/'
+    #     chord_gen, midi_gen = inference_arg(PATH + 'p.mid', 'data/train_stage_ab_arg.pt')
+    #     chord_gen.write(PATH + 'chord_gen.mid')
+    #     midi_gen.write(PATH + 'midi_gen.mid')
+
+    inference_chord_voicing_disentanglement(r'D:\projects\polydis2\experiments\20221003\test1\chord.mid',
+                                            r'D:\projects\polydis2\experiments\20230823\test5\voicing.mid',
+                                            'result_2023-10-25_021721/models/disvae-nozoth_final.pt').write('test.mid')
