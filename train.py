@@ -174,7 +174,7 @@ elif config.training_stage == 5:
                                stage_b_pt_decoder, stage_b_arg_decoder, stage_b_arg_loss)
 
     # stage dict
-    stage_a_state_dict = torch.load('data/train_stage1_outdated.pt',
+    stage_a_state_dict = torch.load('result_2023-10-25_021721/models/disvae-nozoth_final.pt',
                                     map_location=config.device)
     for key in list(stage_a_state_dict.keys()):
         stage_a_state_dict['stage_a_' + key] = stage_a_state_dict[key]
