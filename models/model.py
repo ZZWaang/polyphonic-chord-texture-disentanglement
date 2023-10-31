@@ -43,11 +43,6 @@ class DisentangleVAE(PytorchModel):
         return c.to(self.device)
 
     def run(self, x, c, pr_mat, tfr1, tfr2, tfr3, confuse=True):
-        torch.set_printoptions(threshold=np.inf)
-        print(c[100], pr_mat[0])
-
-        pr2midi(pr_mat[100].cpu().numpy()).write('test.mid')
-        input()
         embedded_x, lengths = self.decoder.emb_x(x)
         # cc = self.get_chroma(pr_mat)
         dist_chd = self.chd_encoder(c)
