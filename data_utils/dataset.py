@@ -487,7 +487,7 @@ def prepare_dataset_pop909_stage_a(seed, bs_train, bs_val,
                                      random_train=random_train,
                                      random_val=random_val,
                                      full_song=full_song,
-                                     name='pop909_stage_a.npz' if full_song else 'poly-dis-niko_new.npz')
+                                     name='pop909_stage_a.npz' if full_song else 'pop909_stage_a_no_full_song_fixed.npz')
 
 
 def prepare_niko_like_dataset(seed, bs_train, bs_val,

@@ -14,6 +14,8 @@ def prepare_pop909_stage_a_dataset():
     song_idx = 0
     song_prs = []
     song_chord_data = []
+    flattened_chord_data = []
+    flattened_prs = []
     for file in tqdm(os.listdir('../zv_new')):
         check = int(file.split('-')[0])
         if check != song_idx:
@@ -24,7 +26,7 @@ def prepare_pop909_stage_a_dataset():
                 song_prs = []
                 song_chord_data = []
             else:
-                print(file)
+                pass
         midi = pretty_midi.PrettyMIDI('../zv_new/' + file)
         downbeats = midi.get_downbeats()
         track = midi.instruments[0]
@@ -34,17 +36,21 @@ def prepare_pop909_stage_a_dataset():
             my_sum = sum(i[1:-1])
             if my_sum >= 8:
                 continue
-        pr = midi2pr(track)
-        pr = pr[::2]
-        if len(pr) != 64 or len(chord_data) != 64:
+        pr = midi2pr(track, down_sample=2)
+        if pr.shape != (64, 128) or chord_data.shape != (64, 14):
             continue
         song_prs.append(pr)
         song_chord_data.append(chord_data)
+        flattened_prs.append(pr)
+        flattened_chord_data.append(chord_data)
 
-    print(len(all_prs), len(all_chord_data))
     all_prs = np.array(all_prs)
     all_chord_data = np.array(all_chord_data)
-    np.savez_compressed('../data/pop909_stage_a_old.npz', pr=all_prs, c=all_chord_data)
+    flattened_prs = np.array(flattened_prs)
+    flattened_chord_data = np.array(flattened_chord_data)
+    print(all_prs.shape, all_chord_data.shape)
+    print(flattened_prs.shape, flattened_chord_data.shape)
+    np.savez_compressed('../data/pop909_stage_a_no_full_song_fixed.npz', pr=flattened_prs, c=flattened_chord_data)
 
 
 def preprocess_zv():
@@ -61,22 +67,22 @@ def preprocess_zv():
 
 
 if __name__ == '__main__':
-    # prepare_pop909_stage_a_dataset()
-    file = np.load('../data/pop909_stage_a.npz', allow_pickle=True)
-    data = file['pr']
-    c = file['c']
-    for i in data:
-        for j in i:
-            for t in j:
-                count = 0
-                for p in range(128):
-                    if t[p] != 0:
-                        t[p] = 8
+    prepare_pop909_stage_a_dataset()
+    # file = np.load('../data/pop909_stage_a.npz', allow_pickle=True)
+    # data = file['pr']
+    # c = file['c']
     # for i in data:
     #     for j in i:
     #         for t in j:
     #             count = 0
     #             for p in range(128):
     #                 if t[p] != 0:
-    #                     print(t[p])
-    np.savez_compressed('../data/pop909_stage_a.npz', pr=data, c=c, allow_pickle=True)
+    #                     t[p] = 8
+    # # for i in data:
+    # #     for j in i:
+    # #         for t in j:
+    # #             count = 0
+    # #             for p in range(128):
+    # #                 if t[p] != 0:
+    # #                     print(t[p])
+    # np.savez_compressed('../data/pop909_stage_a.npz', pr=data, c=c, allow_pickle=True)
