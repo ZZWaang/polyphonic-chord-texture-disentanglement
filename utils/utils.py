@@ -480,7 +480,8 @@ def nmat_to_pr(nmat):
 
 def extract_voicing_from_8d_nmat_2bars(nmat):
     def calc_note_end(weight):
-        note_end_unit_count = min_time_unit_count + int(length_unit * weight)
+        # note_end_unit_count = min_time_unit_count + int(length_unit * weight)
+        note_end_unit_count = min_time_unit_count + 16
         return note_end_unit_count // min_t[2], note_end_unit_count % min_t[2], min_t[2]
 
     if not nmat:
