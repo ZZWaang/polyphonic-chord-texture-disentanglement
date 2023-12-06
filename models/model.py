@@ -1003,7 +1003,6 @@ class DisentangleARGFull(PytorchModel):
                stage_b_negative, stage_b_pred
 
     def stage_a_pr_to_b(self, p):
-        pr2midi(p[0].cpu().detach().numpy()).write('o.mid')
         all_prs = []
         for idx in range(p.shape[0]):
             stretched_pr = np.zeros((4, 32, 128))
