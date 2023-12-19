@@ -761,6 +761,9 @@ class DisentangleARGFull(PytorchModel):
         if self.training_stage == 0:
             outputs = self.run(stage_a_x, stage_a_c, stage_a_pr_mat, stage_b_x, stage_b_pr_mat, tfr1, tfr2, tfr3)
             loss = self.loss_function(stage_a_x, stage_a_c, stage_b_x, *outputs, beta, weights)
+        elif self.training_stage == 1:
+            outputs = self.run_only_a(stage_a_x, stage_a_c, stage_a_pr_mat, tfr1, tfr2, tfr3)
+            loss = self.loss_function_only_a(stage_a_x, stage_a_c, *outputs, beta, weights)
         elif self.training_stage == 2:
             stage_b_x_c, stage_b_pr_mat_c = self.stage_a_pr_to_b(stage_a_pr_mat)
             outputs = self.run_only_b(stage_b_x_c, stage_b_pr_mat_c, stage_b_x, stage_b_pr_mat, tfr1, tfr2, tfr3)
@@ -845,6 +848,19 @@ class DisentangleARGFull(PytorchModel):
         loss = chord_loss + stage_a_recon_loss + stage_b_recon_loss + stage_a_arg_loss + stage_b_arg_loss
         return loss, chord_loss, stage_a_recon_loss, stage_a_pl, stage_a_dl, stage_b_recon_loss, stage_b_pl, \
                stage_b_dl, stage_a_arg_loss, stage_b_arg_loss
+
+    def loss_function_only_a(self, stage_a_x, stage_a_c, stage_a_recon_root, stage_a_recon_chroma, stage_a_recon_bass,
+                                stage_a_pitch_outs, stage_a_dur_outs, stage_a_positive, stage_a_negative, stage_a_pred,
+                                beta, weights, weighted_dur=False):
+        chord_loss, root, chroma, bass = self.chord_loss(stage_a_c[1:], stage_a_recon_root,
+                                                         stage_a_recon_chroma,
+                                                         stage_a_recon_bass)
+        stage_a_recon_loss, stage_a_pl, stage_a_dl = self.stage_a_decoder.recon_loss(stage_a_x[1:], stage_a_pitch_outs,
+                                                                                     stage_a_dur_outs,
+                                                                                     weights, weighted_dur)
+        stage_a_arg_loss = self.stage_a_arg_loss_fun(stage_a_pred, stage_a_positive, stage_a_negative, temperature=1)
+        loss = chord_loss + stage_a_recon_loss + stage_a_arg_loss
+        return loss, chord_loss, stage_a_recon_loss, stage_a_pl, stage_a_dl, stage_a_arg_loss
 
     def loss_function_only_b(self, stage_b_x_c, stage_b_x, stage_b_pitch_outs_c, stage_b_dur_outs_c, stage_b_pitch_outs,
                              stage_b_dur_outs, stage_b_positive, stage_b_negative, stage_b_pred, beta, weights,
@@ -976,6 +992,32 @@ class DisentangleARGFull(PytorchModel):
                stage_b_pitch_outs, stage_b_dur_outs, \
                stage_a_positive, stage_a_negative, stage_a_pred, \
                stage_b_positive, stage_b_negative, stage_b_pred
+
+    def run_only_a(self, stage_a_x, stage_a_c, stage_a_pr_mat, tfr1, tfr2, tfr3, confuse=True):
+        dist_chd = self.stage_a_chd_encoder(stage_a_c)
+        dist_rhy = self.stage_a_rhy_encoder(stage_a_pr_mat)
+        z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], False)
+        dec_z = torch.cat([z_chd, z_rhy], dim=-1).unsqueeze(0)
+
+        y_input = dec_z[:, :-1]
+        y_expected = dec_z[:, 1:]
+        stage_a_pred = self.stage_a_arg_decoder(y_input)
+        stage_a_pred = stage_a_pred[0]
+        stage_a_positive = torch.permute(y_expected, (1, 0, 2))
+        stage_a_negative = torch.concat(
+            [torch.unsqueeze(torch.cat((stage_a_positive[: i, 0], stage_a_positive[i + 1:, 0]), dim=0), dim=0) \
+             for i in range(stage_a_positive.shape[0])], dim=0)
+
+        embedded_x, lengths = self.stage_a_decoder.emb_x(stage_a_x[1:])
+
+        stage_a_pitch_outs, stage_a_dur_outs = self.stage_a_decoder(stage_a_pred, False, embedded_x, lengths, tfr1,
+                                                                    tfr2)
+        stage_a_recon_root, stage_a_recon_chroma, stage_a_recon_bass = self.stage_a_chd_decoder(stage_a_pred[:, 0:256],
+                                                                                                False, tfr3,
+                                                                                                stage_a_c[1:])
+
+        return stage_a_recon_root, stage_a_recon_chroma, stage_a_recon_bass, stage_a_pitch_outs, stage_a_dur_outs, \
+               stage_a_positive, stage_a_negative, stage_a_pred
 
     def run_only_b(self, stage_b_x_c, stage_b_pr_mat_c, stage_b_x, stage_b_pr_mat,
                    tfr1, tfr2, tfr3, confuse=True):

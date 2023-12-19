@@ -93,7 +93,7 @@ elif config.training_stage == 3:
     model = DisentangleARG(config.name, config.device, chd_encoder,
                            voicing_encoder, voicing_decoder, chd_decoder, arg_decoder, arg_loss)
     model.load_state_dict(
-        torch.load('result_2023-06-06_122449/models/disvae-nozoth_final.pt', map_location=config.device), strict=False)
+        torch.load('data/train_stage1_20231121.pt', map_location=config.device), strict=False)
     data_loaders = MusicDataLoaders.get_loaders(SEED, dataset_name='pop909_stage_a',
                                                 bs_train=config.batch_size, bs_val=config.batch_size,
                                                 portion=8, shift_low=-6, shift_high=5,
@@ -171,7 +171,7 @@ elif config.training_stage == 5:
                                stage_a_chd_encoder, stage_a_voicing_encoder, stage_a_chd_decoder,
                                stage_a_voicing_decoder, stage_a_arg_decoder, stage_a_arg_loss,
                                stage_b_voicing_encoder, stage_b_rhy_encoder, stage_b_voicing_decoder,
-                               stage_b_pt_decoder, stage_b_arg_decoder, stage_b_arg_loss, 2)
+                               stage_b_pt_decoder, stage_b_arg_decoder, stage_b_arg_loss, 1)
 
     # stage dict
     stage_a_state_dict = torch.load('data/train_stage1_20231121.pt',
@@ -198,9 +198,12 @@ elif config.training_stage == 5:
     # writer_names = ['loss', 'chord_loss', 'stage_a_recon_loss', 'stage_a_pl', 'stage_a_dl', 'stage_b_recon_loss',
     #                 'stage_b_pl', 'stage_b_dl', 'stage_a_arg_loss', 'stage_b_arg_loss']
 
+    # only a
+    writer_names = ['loss', 'chord_loss', 'stage_a_recon_loss', 'stage_a_pl', 'stage_a_dl', 'stage_a_arg_loss']
+
     # only b
-    writer_names = ['loss', 'stage_b_recon_loss', 'stage_b_pl', 'stage_b_dl', 'stage_b_recon_loss_c', 'stage_b_pl_c',
-                    'stage_b_dl_c', 'stage_b_arg_loss']
+    # writer_names = ['loss', 'stage_b_recon_loss', 'stage_b_pl', 'stage_b_dl', 'stage_b_recon_loss_c', 'stage_b_pl_c',
+    #                 'stage_b_dl_c', 'stage_b_arg_loss']
 
 
 else:

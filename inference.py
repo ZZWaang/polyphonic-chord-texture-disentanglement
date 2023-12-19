@@ -254,6 +254,32 @@ def inference_arg(prompt, checkpoint):
     return chord_gen, midi_gen
 
 
+def inference_arg_only_b(chord, texture, checkpoint):
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    t = midi2pr(pyd.PrettyMIDI(texture).instruments[0])
+    texture_pr = torch.from_numpy(t).float().to(device).reshape(4, 32, 128)
+    c = midi2pr(pyd.PrettyMIDI(chord).instruments[0])
+    chord_pr = torch.from_numpy(c).float().to(device).reshape(-1, 32, 128)
+    print(chord_pr.shape, texture_pr.shape)
+
+    model = DisentangleARGFull.init_model(device).to(device)
+    checkpoint = torch.load(checkpoint, map_location=device)
+    model.load_state_dict(checkpoint, strict=True)
+    pt_decoder = PtvaeDecoder(note_embedding=None, dec_dur_hid_size=64, z_size=512)
+    all_est_x = model.inference_stage_b(chord_pr, texture_pr)
+    start = 0
+    midi_gen = pyd.PrettyMIDI(initial_tempo=120)
+    texture_track = pyd.Instrument(program=pyd.instrument_name_to_program('Acoustic Grand Piano'))
+    for i in all_est_x:
+        print(i.shape)
+        pr, _ = pt_decoder.grid_to_pr_and_notes(grid=i, bpm=120, start=0)
+        texture_notes = accompany_matrix2data(pr_matrix=pr, tempo=120, start_time=start, get_list=True)
+        texture_track.notes += texture_notes
+        start += 60 / 120 * 8
+    midi_gen.instruments.append(texture_track)
+    return midi_gen
+
+
 if __name__ == '__main__':
     # for i in range(1, 3):
     #     PATH = f'experiments/20230321/{i}/'
@@ -307,10 +333,15 @@ if __name__ == '__main__':
 
     # for i in range(2, 3):
     #     PATH = f'experiments/20231025/{i}/'
-    #     chord_gen, midi_gen = inference_arg(PATH + 'p.mid', 'result_2023-10-25_133817/models/disvae-nozoth_final.pt')
+    #     chord_gen, midi_gen = inference_arg(PATH + 'p.mid', 'data/train_stage_ab_arg.pt')
     #     chord_gen.write(PATH + 'chord_gen.mid')
     #     midi_gen.write(PATH + 'midi_gen.mid')
     # #
-    inference_chord_voicing_disentanglement(r'D:\projects\polydis2\experiments\20231122\1\p.mid',
-                                            r'D:\projects\polydis2\experiments\20231122\1\p.mid',
-                                            'data/train_stage1_20231121.pt').write(r'D:\projects\polydis2\experiments\20231122\1\test.mid')
+    # inference_chord_voicing_disentanglement(r'D:\projects\polydis2\experiments\20231122\1\p.mid',
+    #                                         r'D:\projects\polydis2\experiments\20231122\1\p.mid',
+    #                                         'data/train_stage1_20231121.pt').write(r'D:\projects\polydis2\experiments\20231122\1\test.mid')
+
+    for i in range(1, 3):
+        PATH = f'experiments/20231206/{i}/'
+        midi_gen = inference_arg_only_b(PATH + 'c.mid', PATH + 't.mid', 'result_2023-12-06_162237/models/disvae-nozoth_final.pt.')
+        midi_gen.write(PATH + 'midi_gen.mid')
