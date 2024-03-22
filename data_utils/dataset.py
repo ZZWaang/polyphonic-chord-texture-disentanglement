@@ -245,6 +245,22 @@ class ArrangementDataset(Dataset):
         return batch_data
 
 
+class Pop909XuranDataset(Dataset):
+
+    def __init(self, data, shift_low, shift_high):
+        self.data = data
+        self.shift_low = shift_low
+        self.shift_high = shift_high
+        self.cache = {}
+
+    def __len(self):
+        return len(self.data) * (self.shift_high - self.shift_low + 1)
+
+    def __getitem__(self, id):
+        no = id // (self.shift_high - self.shift_low + 1)
+        shift = id % (self.shift_high - self.shift_low + 1) + self.shift_low
+
+
 def detrend_pianotree(piano_tree, c):
     # piano_tree: (32, 16, 6)
     root = np.argmax(c[:, 0: 12], axis=-1)
@@ -487,7 +503,7 @@ def prepare_dataset_pop909_stage_a(seed, bs_train, bs_val,
                                      random_train=random_train,
                                      random_val=random_val,
                                      full_song=full_song,
-                                     name='pop909_stage_a.npz' if full_song else 'pop909_stage_a_no_full_song_fixed.npz')
+                                     name='xuran.npz' if full_song else 'pop909_stage_a_no_full_song_fixed.npz')
 
 
 def prepare_niko_like_dataset(seed, bs_train, bs_val,
@@ -501,9 +517,30 @@ def prepare_niko_like_dataset(seed, bs_train, bs_val,
     np.save('test_ids.npy', test_ids)
     print('Constructing Training Set')
     train_set = wrap_dataset(data, train_ids, shift_low, shift_high,
-                             num_bar=num_bar, niko=True, cache_name='niko_train', full_song=full_song)
+                             num_bar=num_bar, niko=True, cache_name='niko_train', full_song=full_song, prepare_voicing=True)
     print('Constructing Validation Set')
-    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True, cache_name='niko_val', full_song=full_song)
+    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True, cache_name='niko_val', full_song=full_song, prepare_voicing=True)
+    print(f'Done with {len(train_set)} training samples, {len(val_set)} validation samples')
+    train_loader = DataLoader(train_set, bs_train, random_train)
+    val_loader = DataLoader(val_set, bs_val, random_val)
+    return train_loader, val_loader
+
+
+def prepare_dataset_pop909_xuran(seed, bs_train, bs_val,
+                                 portion=8, shift_low=-6, shift_high=5, num_bar=2, random_train=True, random_val=False,
+                                 full_song=False):
+    print('Loading Training Data...')
+    data = np.load(f'data/xuran.npz', allow_pickle=True)
+    np.random.seed(seed)
+    train_ids, val_ids, test_ids = split_dataset(len(data), portion)
+    np.save('test_ids.npy', test_ids)
+    print('Constructing Training Set')
+    train_set = wrap_dataset(data, train_ids, shift_low, shift_high,
+                             num_bar=num_bar, niko=True, cache_name='niko_train', full_song=full_song,
+                             prepare_voicing=True)
+    print('Constructing Validation Set')
+    val_set = wrap_dataset(data, val_ids, 0, 0, num_bar=num_bar, niko=True, cache_name='niko_val', full_song=full_song,
+                           prepare_voicing=True)
     print(f'Done with {len(train_set)} training samples, {len(val_set)} validation samples')
     train_loader = DataLoader(train_set, bs_train, random_train)
     val_loader = DataLoader(val_set, bs_val, random_val)

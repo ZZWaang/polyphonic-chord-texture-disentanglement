@@ -3,7 +3,7 @@ import pretty_midi
 import torch
 
 from data_utils.dataset import prepare_dataset_niko, prepare_dataset, prepare_dataset_pop909_voicing, \
-    prepare_dataset_pop909_stage_a
+    prepare_dataset_pop909_stage_a, prepare_dataset_pop909_xuran
 from amc_dl.torch_plus import DataLoaders
 from amc_dl.torch_plus import TrainingInterface
 
@@ -26,6 +26,9 @@ class MusicDataLoaders(DataLoaders):
         elif dataset_name == 'pop909_stage_a':
             train, val = prepare_dataset_pop909_stage_a(seed, bs_train, bs_val, portion, shift_low,
                                                         shift_high, num_bar, random_train, random_val, full_song)
+        elif dataset_name == 'pop909_xuran':
+            train, val = prepare_dataset_pop909_xuran(seed, bs_train, bs_val, portion, shift_low,
+                                                      shift_high, num_bar, random_train, random_val, full_song)
         else:
             raise Exception
         return MusicDataLoaders(train, val, bs_train, bs_val)

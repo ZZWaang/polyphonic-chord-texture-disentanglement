@@ -374,7 +374,8 @@ class NikoChordProgression:
             mel_track = None
             acc_track = translate_track(track, db_pos[i])
             chord = broken_chords[i]
-            data_track.append([mel_track, acc_track, chord])
+            voicing_track = extract_voicing_from_8d_nmat(acc_track)
+            data_track.append([mel_track, acc_track, chord, voicing_track])
             if mel_track is None and acc_track is None:
                 indicator[i] = 0
                 continue

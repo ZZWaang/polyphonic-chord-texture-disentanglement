@@ -773,6 +773,11 @@ class DisentangleARGFull(PytorchModel):
 
     @staticmethod
     def input_to_correct_shape(stage_a_x, stage_a_c, stage_a_pr_mat, stage_b_x, stage_b_pr_mat):
+        print(stage_a_x.shape)
+        print(stage_a_c.shape)
+        print(stage_a_pr_mat.shape)
+        print(stage_b_x.shape)
+        print(stage_b_pr_mat.shape)
         stage_a_x = stage_a_x.squeeze(0)
         stage_a_c = stage_a_c.squeeze(0)
         stage_a_c = stage_a_c[:, ::4, :]
